@@ -1,0 +1,30 @@
+# For local testing of the production image before deploying to Dokploy:
+#   docker compose up --build
+# then open http://localhost:4000 (the app serves both the API and the
+# built React client from this one container). Dokploy itself deploys
+# straight from the Dockerfile — this compose file isn't required there,
+# it's just a convenient local dry run.
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - mongo
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/funny-mouse
+      JWT_SECRET: change-this-to-a-long-random-secret
+      JWT_EXPIRES_IN: 12h
+      PORT: 4000
+    ports:
+      - "4000:4000"
+
+volumes:
+  mongo_data:

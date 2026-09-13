@@ -87,3 +87,37 @@ To change the PIN later, use "Reset pwd" on that user's row in the same Users ta
 - All business data (customers, bills, sessions, membership, shop config) lives in MongoDB — there is no local/offline fallback.
 - Bill totals and membership math are recomputed server-side on save; the client never has the final say on what gets charged.
 - "Play chal raha hai" (live session timers) refreshes every ~15 seconds via polling rather than a websocket — simple, and fine for a single-counter or few-counter shop.
+
+## Deploying on a VPS with Dokploy
+
+The root `Dockerfile` builds **one image** that serves both the API and the built React app from the same origin (API under `/api`, everything else — including `/owner` — falls back to the React app). That means one Dokploy application, one domain, no CORS setup, and `/owner` works on a direct link or hard refresh, not just in-app navigation.
+
+1. **Push this repo to GitHub/GitLab** (already done if you're reading this from the deployed repo) so Dokploy can pull from it.
+
+2. **Create a MongoDB database in Dokploy** — Dokploy's "Databases" section can spin up a MongoDB instance for you and gives you its internal connection string. (A MongoDB Atlas URI works exactly the same way if you'd rather use that instead.)
+
+3. **Create a new Application in Dokploy**, connect it to this repo, and set:
+   - **Build type**: Dockerfile
+   - **Dockerfile path**: `Dockerfile` (repo root)
+   - **Build context**: repo root
+   - **Port**: `4000` (matches `EXPOSE 4000` in the Dockerfile)
+
+4. **Set environment variables** on the Dokploy app:
+   ```
+   MONGODB_URI=<connection string from step 2>
+   JWT_SECRET=<a long random string — generate one, don't reuse the example>
+   JWT_EXPIRES_IN=12h
+   PORT=4000
+   ```
+   You do **not** need to set `VITE_API_URL` — the Dockerfile already bakes in `/api` (relative, same-origin) as the client build's default, which is correct for this single-container setup.
+
+5. **Attach your domain** in Dokploy and let it issue HTTPS (Traefik + Let's Encrypt, automatic). Optionally point Dokploy's health check at `GET /api/health`.
+
+6. **Deploy.** Watch the build logs — on first boot the server seeds the default admin (`admin` / `admin123`) and prints it to the container logs. Log in at `https://your-domain/`, change that password immediately (Setup → Users), and create the real staff/admin/owner accounts. The owner PIN portal is then live at `https://your-domain/owner`.
+
+**Testing the production image locally first** (optional but recommended before pushing to the VPS):
+```bash
+docker compose up --build
+# open http://localhost:4000
+```
+This runs the same Dockerfile plus a throwaway local MongoDB — useful to catch build issues before Dokploy does.

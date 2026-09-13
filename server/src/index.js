@@ -1,4 +1,5 @@
 require('dotenv').config();
+const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const connectDB = require('./config/db');
@@ -23,6 +24,16 @@ app.use('/api/customers', customerRoutes);
 app.use('/api/bills', billRoutes);
 app.use('/api/members', memberRoutes);
 app.use('/api/sessions', sessionRoutes);
+
+// Serve the built React client (client/dist is copied into ./public at
+// Docker image build time — see the root Dockerfile). Any GET request that
+// isn't under /api falls back to index.html so client-side paths like
+// /owner work on a hard refresh or direct link, not just via in-app nav.
+const clientDir = path.join(__dirname, '..', 'public');
+app.use(express.static(clientDir));
+app.get(/^\/(?!api\/).*/, (req, res, next) => {
+  res.sendFile(path.join(clientDir, 'index.html'), (err) => { if (err) next(); });
+});
 
 app.use(notFound);
 app.use(errorHandler);
