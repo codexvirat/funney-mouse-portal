@@ -2,7 +2,14 @@ const mongoose = require('mongoose');
 
 const slabSchema = new mongoose.Schema({ id: String, label: String, minutes: Number, price: Number }, { _id: false });
 const menuItemSchema = new mongoose.Schema({ id: String, name: String, price: Number }, { _id: false });
-const planSchema = new mongoose.Schema({ id: String, name: String, price: Number, hours: Number, days: Number }, { _id: false });
+const planSchema = new mongoose.Schema({ id: String, name: String, price: Number, hours: Number, days: Number, discountPercent: { type: Number, default: 0 } }, { _id: false });
+const tableSchema = new mongoose.Schema({ id: String, name: String, capacity: Number }, { _id: false });
+const happyHourSchema = new mongoose.Schema({
+  enabled: { type: Boolean, default: false },
+  start: { type: String, default: '15:00' },
+  end: { type: String, default: '18:00' },
+  discountPercent: { type: Number, default: 0 }
+}, { _id: false });
 
 // Single settings document for the whole shop.
 const configSchema = new mongoose.Schema({
@@ -13,7 +20,11 @@ const configSchema = new mongoose.Schema({
   sockPrice: { type: Number, default: 50 },
   adultFree: { type: Boolean, default: true },
   menu: { type: [menuItemSchema], default: [] },
-  plans: { type: [planSchema], default: [] }
+  plans: { type: [planSchema], default: [] },
+  tables: { type: [tableSchema], default: [] },
+  memberDiscountPercent: { type: Number, default: 0 },
+  memberDiscountMinSpend: { type: Number, default: 0 },
+  happyHour: { type: happyHourSchema, default: () => ({}) }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Config', configSchema);

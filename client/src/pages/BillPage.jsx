@@ -3,8 +3,9 @@ import api from '../api/client';
 import { useConfig } from '../context/ConfigContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { billSubtotal, billDiscount, billTotal, kidsOnBill } from '../utils/bill';
+import { billSubtotal, billDiscount, billTotalWithAuto, kidsOnBill } from '../utils/bill';
 import { uid } from '../utils/uid';
+import { useAutoDiscount } from '../hooks/useAutoDiscount';
 import CustomerBox from '../components/CustomerBox';
 import PlayPanel from '../components/PlayPanel';
 import FoodPanel from '../components/FoodPanel';
@@ -96,7 +97,8 @@ export default function BillPage({ billIntent, onConsumeIntent }) {
 
   const sub = billSubtotal(items);
   const disc = billDiscount(items, discount, discountType);
-  const total = billTotal(items, discount, discountType);
+  const autoDiscount = useAutoDiscount((cust && cust.phone) || phone, items);
+  const total = billTotalWithAuto(items, discount, discountType, autoDiscount);
   const kids = kidsOnBill(items);
 
   const resetAfterSave = () => {
@@ -161,7 +163,7 @@ export default function BillPage({ billIntent, onConsumeIntent }) {
             discount={discount} setDiscount={setDiscount}
             discountType={discountType} setDiscountType={setDiscountType}
             canDiscount={isAdmin || config.staffDiscount !== false}
-            sub={sub} disc={disc} total={total} />
+            sub={sub} disc={disc} total={total} autoDiscount={autoDiscount} />
         </div>
       </div>
 

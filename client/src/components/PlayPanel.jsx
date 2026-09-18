@@ -5,7 +5,7 @@ import { memberActive, memberLabel } from '../utils/member';
 
 export default function PlayPanel({
   config, cust, useMember, setUseMember, playKids, setPlayKids,
-  playSlab, setPlaySlab, playCustom, setPlayCustom, onAdd, toast
+  playSlab, setPlaySlab, playCustom, setPlayCustom, onAdd, toast, onStartTimer
 }) {
   const canMember = memberActive(cust);
   const slabs = slabSorted(config);
@@ -27,6 +27,7 @@ export default function PlayPanel({
   };
 
   const startSession = async () => {
+    if (onStartTimer) { await onStartTimer(); return; }
     try {
       await api.post('/sessions', {
         kids: playKids, phone: (cust && cust.phone) || '', name: (cust && cust.name) || 'Walk-in',

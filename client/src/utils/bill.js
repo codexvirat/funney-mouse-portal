@@ -12,6 +12,14 @@ export function billTotal(items, discount, discountType) {
   return Math.max(0, billSubtotal(items) - billDiscount(items, discount, discountType));
 }
 
+// Same as billTotal but also nets out server-previewed auto-discounts
+// (membership %, happy hour) so the amount shown matches what checkout
+// will actually charge — see hooks/useAutoDiscount.
+export function billTotalWithAuto(items, discount, discountType, autoDiscount) {
+  const auto = (autoDiscount && ((autoDiscount.memberDiscount || 0) + (autoDiscount.happyHourDiscount || 0))) || 0;
+  return Math.max(0, billTotal(items, discount, discountType) - auto);
+}
+
 export function kidsOnBill(items) {
   return items.filter(i => i.cat === 'play').reduce((a, i) => a + (i.meta && i.meta.kids || 0), 0);
 }

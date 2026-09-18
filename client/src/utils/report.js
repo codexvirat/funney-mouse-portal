@@ -15,3 +15,18 @@ export function rollup(bills) {
   });
   return t;
 }
+
+// Revenue/visits/turnover per table — only counts bills that came from a
+// table (tableName set), skipping quick-bill/walk-in sales.
+export function tableRollup(bills) {
+  const byTable = {};
+  bills.forEach(b => {
+    if (b.void || !b.tableName) return;
+    const row = byTable[b.tableName] || { name: b.tableName, bills: 0, revenue: 0, totalMins: 0 };
+    row.bills++;
+    row.revenue += b.total;
+    row.totalMins += b.durationMins || 0;
+    byTable[b.tableName] = row;
+  });
+  return Object.values(byTable).sort((a, b) => b.revenue - a.revenue);
+}

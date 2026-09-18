@@ -109,8 +109,16 @@ export default function SetupPage() {
   const delMenu = (i) => setForm(prev => ({ ...prev, menu: prev.menu.filter((_, ix) => ix !== i) }));
 
   const updatePlan = (i, f, v) => setForm(prev => { const arr = [...prev.plans]; arr[i] = { ...arr[i], [f]: f === 'name' ? v : (Number(v) || 0) }; return { ...prev, plans: arr }; });
-  const addPlan = () => setForm(prev => ({ ...prev, plans: [...prev.plans, { id: uid(), name: 'New plan', price: 0, hours: 0, days: 30 }] }));
+  const addPlan = () => setForm(prev => ({ ...prev, plans: [...prev.plans, { id: uid(), name: 'New plan', price: 0, hours: 0, days: 30, discountPercent: 0 }] }));
   const delPlan = (i) => setForm(prev => ({ ...prev, plans: prev.plans.filter((_, ix) => ix !== i) }));
+
+  const happyHour = form.happyHour || { enabled: false, start: '15:00', end: '18:00', discountPercent: 0 };
+  const setHappyHour = (f, v) => setForm(prev => ({ ...prev, happyHour: { ...happyHour, [f]: v } }));
+
+  const tables = form.tables || [];
+  const updateTable = (i, f, v) => setForm(prev => { const arr = [...(prev.tables || [])]; arr[i] = { ...arr[i], [f]: f === 'name' ? v : (Number(v) || 0) }; return { ...prev, tables: arr }; });
+  const addTable = () => setForm(prev => ({ ...prev, tables: [...(prev.tables || []), { id: uid(), name: 'T' + ((prev.tables || []).length + 1), capacity: 4 }] }));
+  const delTable = (i) => setForm(prev => ({ ...prev, tables: (prev.tables || []).filter((_, ix) => ix !== i) }));
 
   const saveAll = async () => {
     setSaving(true);
@@ -128,8 +136,44 @@ export default function SetupPage() {
             <input type="checkbox" checked={form.staffDiscount !== false} onChange={e => setField('staffDiscount', e.target.checked)} style={{ width: 18, height: 18 }} />
             <span style={{ margin: 0 }}>Staff discount de sakta hai</span>
           </label>
+          <label className="f"><span>Member discount % (default — food + play par auto lagta hai)</span>
+            <input type="number" min="0" max="100" value={form.memberDiscountPercent || 0} onChange={e => setField('memberDiscountPercent', Number(e.target.value) || 0)} />
+          </label>
+          <label className="f"><span>Min spend (₹) discount ke liye — 0 = koi limit nahi</span>
+            <input type="number" min="0" value={form.memberDiscountMinSpend || 0} onChange={e => setField('memberDiscountMinSpend', Number(e.target.value) || 0)} />
+          </label>
         </div>
       </div></div>
+
+      <div className="card"><div className="hd"><h2>Happy hour</h2></div><div className="bd">
+        <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+          <input type="checkbox" checked={!!happyHour.enabled} onChange={e => setHappyHour('enabled', e.target.checked)} style={{ width: 18, height: 18 }} />
+          <span>Happy hour on hai</span>
+        </label>
+        <div className="row">
+          <label className="f" style={{ margin: 0, flex: '1 1 110px' }}><span>Start</span>
+            <input type="time" value={happyHour.start} onChange={e => setHappyHour('start', e.target.value)} /></label>
+          <label className="f" style={{ margin: 0, flex: '1 1 110px' }}><span>End</span>
+            <input type="time" value={happyHour.end} onChange={e => setHappyHour('end', e.target.value)} /></label>
+          <label className="f" style={{ margin: 0, flex: '1 1 110px' }}><span>Discount %</span>
+            <input type="number" min="0" max="100" value={happyHour.discountPercent || 0} onChange={e => setHappyHour('discountPercent', Number(e.target.value) || 0)} /></label>
+        </div>
+        <p className="hint" style={{ margin: '10px 0 0' }}>Is time window me food + play par ye discount auto lagega, member discount ke sath stack hoga.</p>
+      </div></div>
+
+      <div className="card"><div className="hd"><h2>Tables</h2><div className="spacer"></div><span className="hint">{tables.length} tables</span></div>
+        <div className="bd">
+          {tables.map((t, i) => (
+            <div className="row" key={t.id} style={{ marginBottom: 8 }}>
+              <input type="text" value={t.name} placeholder="Table name" style={{ flex: '2 1 130px' }} onChange={e => updateTable(i, 'name', e.target.value)} />
+              <input type="number" value={t.capacity} placeholder="Seats" style={{ flex: '1 1 90px' }} onChange={e => updateTable(i, 'capacity', e.target.value)} />
+              <button className="btn sm danger" style={{ flex: '0 0 auto' }} onClick={() => delTable(i)}>✕</button>
+            </div>
+          ))}
+          <button className="btn sm" style={{ marginTop: 10 }} onClick={addTable}>+ Add table</button>
+          <p className="hint" style={{ margin: '10px 0 0' }}>Ye tables "Tables" tab me dikhenge — jab koi group aaye, staff yahi se table open karega.</p>
+        </div>
+      </div>
 
       <div className="card"><div className="hd"><h2>Play area rates</h2></div><div className="bd">
         {form.playSlabs.map((s, i) => (
@@ -170,11 +214,12 @@ export default function SetupPage() {
             <input type="number" value={p.price} placeholder="₹" onChange={e => updatePlan(i, 'price', e.target.value)} />
             <input type="number" value={p.hours} placeholder="hrs" onChange={e => updatePlan(i, 'hours', e.target.value)} />
             <input type="number" value={p.days} placeholder="days" onChange={e => updatePlan(i, 'days', e.target.value)} />
+            <input type="number" min="0" max="100" value={p.discountPercent || 0} placeholder="disc %" style={{ flex: '1 1 80px' }} onChange={e => updatePlan(i, 'discountPercent', e.target.value)} />
             <button className="btn sm danger" style={{ flex: '0 0 auto' }} onClick={() => delPlan(i)}>✕</button>
           </div>
         ))}
         <button className="btn sm" style={{ marginTop: 10 }} onClick={addPlan}>+ Add plan</button>
-        <p className="hint" style={{ margin: '10px 0 0' }}>Hours = 0 rakhein to unlimited plan ban jayega.</p>
+        <p className="hint" style={{ margin: '10px 0 0' }}>Hours = 0 rakhein to unlimited plan ban jayega. Disc % = 0 rakhein toh Shop card wala default member discount lagega.</p>
       </div></div>
 
       <UsersCard />

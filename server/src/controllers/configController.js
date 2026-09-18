@@ -27,7 +27,11 @@ const DEFAULT_CFG = {
     { id: 'p1', name: '10 Hour Pack', price: 2800, hours: 10, days: 90 },
     { id: 'p2', name: '20 Hour Pack', price: 5000, hours: 20, days: 180 },
     { id: 'p3', name: 'Monthly Unlimited', price: 4500, hours: 0, days: 30 }
-  ]
+  ],
+  tables: [],
+  memberDiscountPercent: 0,
+  memberDiscountMinSpend: 0,
+  happyHour: { enabled: false, start: '15:00', end: '18:00', discountPercent: 0 }
 };
 
 async function getOrCreateConfig() {
@@ -43,7 +47,7 @@ exports.getConfig = asyncHandler(async (req, res) => {
 
 exports.updateConfig = asyncHandler(async (req, res) => {
   const cfg = await getOrCreateConfig();
-  const fields = ['shopName', 'staffDiscount', 'playSlabs', 'extraHalfHour', 'sockPrice', 'adultFree', 'menu', 'plans'];
+  const fields = ['shopName', 'staffDiscount', 'playSlabs', 'extraHalfHour', 'sockPrice', 'adultFree', 'menu', 'plans', 'tables', 'memberDiscountPercent', 'memberDiscountMinSpend', 'happyHour'];
   fields.forEach(f => {
     if (req.body[f] !== undefined) cfg[f] = req.body[f];
   });

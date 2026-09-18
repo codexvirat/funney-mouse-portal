@@ -5,6 +5,7 @@ import { dstr, prettyDate, tstr } from '../utils/date';
 import { rollup } from '../utils/report';
 import { exportCSV } from '../utils/csv';
 import ReportBreakdown from '../components/ReportBreakdown';
+import TableBreakdown from '../components/TableBreakdown';
 
 function DayReport({ date, bills, t }) {
   return (
@@ -14,6 +15,7 @@ function DayReport({ date, bills, t }) {
           <span>Avg {INR(t.bills ? t.total / t.bills : 0)}</span>{t.disc > 0 && <span>Disc {INR(t.disc)}</span>}</div>
       </div>
       <ReportBreakdown t={t} />
+      <TableBreakdown bills={bills} />
       <div className="card">
         <div className="hd"><h2>Bills</h2><div className="spacer"></div>
           <button className="btn sm" onClick={() => exportCSV(bills, date)}>Export CSV</button></div>
@@ -53,6 +55,7 @@ function MonthReport({ month, bills, t }) {
           <span>Avg/day {INR(keys.length ? t.total / keys.length : 0)}</span></div>
       </div>
       <ReportBreakdown t={t} />
+      <TableBreakdown bills={bills} />
       <div className="card">
         <div className="hd"><h2>Day by day</h2><div className="spacer"></div>
           <button className="btn sm" onClick={() => exportCSV(bills, month)}>Export CSV</button></div>

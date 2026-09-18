@@ -1,6 +1,6 @@
 import { INR } from '../utils/money';
 
-export default function BillItemsCard({ items, removeItem, discount, setDiscount, discountType, setDiscountType, canDiscount, sub, disc, total }) {
+export default function BillItemsCard({ items, removeItem, discount, setDiscount, discountType, setDiscountType, canDiscount, sub, disc, total, autoDiscount }) {
   if (!items.length) {
     return <div className="empty"><b>Bill khaali hai</b>Upar se play, food ya socks add kijiye.</div>;
   }
@@ -39,6 +39,12 @@ export default function BillItemsCard({ items, removeItem, discount, setDiscount
       <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--line)', display: 'grid', gap: 6, fontSize: '14.5px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="hint">Subtotal</span><b className="num">{INR(sub)}</b></div>
         {disc > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--berry)' }}><span>Discount</span><b className="num">− {INR(disc)}</b></div>}
+        {autoDiscount && autoDiscount.memberDiscount > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--grape)' }}><span>Member discount</span><b className="num">− {INR(autoDiscount.memberDiscount)}</b></div>
+        )}
+        {autoDiscount && autoDiscount.happyHourDiscount > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--sky)' }}><span>Happy hour</span><b className="num">− {INR(autoDiscount.happyHourDiscount)}</b></div>
+        )}
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 17 }}><b>Total</b><b className="num">{INR(total)}</b></div>
       </div>
     </>
