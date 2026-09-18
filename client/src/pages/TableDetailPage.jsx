@@ -216,7 +216,10 @@ export default function TableDetailPage({ order, config, freeTables, otherOrders
     }
   };
 
-  const initialPay = order.advance > 0 ? { [order.advanceMode || 'CASH']: order.advance } : undefined;
+  // Clamp to `total` so an advance bigger than the final bill (e.g. a small
+  // top-up order against a large event token) can never leave the payment
+  // sheet stuck in "overpaid" with no way to reach a valid split.
+  const initialPay = order.advance > 0 ? { [order.advanceMode || 'CASH']: Math.min(order.advance, total) } : undefined;
   const initialNote = order.advance > 0 ? `Advance ${INR(order.advance)} (${order.advanceMode}) pehle hi collect ho chuka hai.` : undefined;
 
   const onSaveBill = async (pay) => {

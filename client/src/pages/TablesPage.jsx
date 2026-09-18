@@ -5,11 +5,12 @@ import { useToast } from '../context/ToastContext';
 import { billSubtotal } from '../utils/bill';
 import { INR } from '../utils/money';
 import Sheet from '../components/Sheet';
+import BookingsCard from '../components/BookingsCard';
 import TableDetailPage from './TableDetailPage';
 
 const PAY_MODES = ['CASH', 'UPI', 'CARD'];
 
-function OpenTableSheet({ open, table, onClose, onOpened }) {
+function OpenTableSheet({ open, table, booking, onClose, onOpened }) {
   const toast = useToast();
   const [adults, setAdults] = useState(1);
   const [kids, setKids] = useState(0);
@@ -22,18 +23,23 @@ function OpenTableSheet({ open, table, onClose, onOpened }) {
 
   useEffect(() => {
     if (open) {
-      setAdults(1); setKids(0); setPhone(''); setReserveOnly(false);
-      setWaiterName(''); setAdvance(0); setAdvanceMode('CASH');
+      if (booking) {
+        setAdults(booking.guests || 1); setKids(0); setPhone(booking.phone || '');
+        setReserveOnly(false); setWaiterName(''); setAdvance(booking.advance || 0); setAdvanceMode(booking.advanceMode || 'CASH');
+      } else {
+        setAdults(1); setKids(0); setPhone(''); setReserveOnly(false);
+        setWaiterName(''); setAdvance(0); setAdvanceMode('CASH');
+      }
     }
-  }, [open, table]);
+  }, [open, table, booking]);
 
   if (!table) return <Sheet open={open} onClose={onClose}><div /></Sheet>;
 
   const save = async () => {
     setBusy(true);
     try {
-      let name = 'Walk-in';
-      if (phone.length === 10) {
+      let name = booking ? booking.name : 'Walk-in';
+      if (!booking && phone.length === 10) {
         try {
           const { data } = await api.get('/customers/' + phone);
           if (data.customer) name = data.customer.name || 'Walk-in';
@@ -43,7 +49,8 @@ function OpenTableSheet({ open, table, onClose, onOpened }) {
         tableId: table.id, tableName: table.name,
         phone: phone.length === 10 ? phone : '', name, adults, kids,
         reserved: reserveOnly, waiterName,
-        advance: reserveOnly ? 0 : advance, advanceMode
+        advance: reserveOnly ? 0 : advance, advanceMode,
+        bookingId: booking ? booking._id : undefined
       });
       onOpened(data.order);
     } catch (e) {
@@ -56,10 +63,15 @@ function OpenTableSheet({ open, table, onClose, onOpened }) {
   return (
     <Sheet open={open} onClose={onClose}>
       <h2 style={{ margin: '0 0 12px', fontSize: 17 }}>{table.name} open karein</h2>
-      <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-        <input type="checkbox" checked={reserveOnly} onChange={e => setReserveOnly(e.target.checked)} style={{ width: 18, height: 18 }} />
-        <span>Sirf reserve karein (guest abhi nahi aaye)</span>
-      </label>
+      {booking && (
+        <p className="hint" style={{ margin: '0 0 12px' }}>Booking se link ho raha hai: <b>{booking.name}</b>{booking.advance ? ', advance ' + INR(booking.advance) + ' pre-filled' : ''}.</p>
+      )}
+      {!booking && (
+        <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+          <input type="checkbox" checked={reserveOnly} onChange={e => setReserveOnly(e.target.checked)} style={{ width: 18, height: 18 }} />
+          <span>Sirf reserve karein (guest abhi nahi aaye)</span>
+        </label>
+      )}
       <div className="row" style={{ marginBottom: 14 }}>
         <div style={{ flex: '0 0 auto' }}>
           <span className="hint" style={{ display: 'block', marginBottom: 5 }}>Adults</span>
@@ -104,9 +116,11 @@ function OpenTableSheet({ open, table, onClose, onOpened }) {
 
 export default function TablesPage() {
   const { config } = useConfig();
+  const toast = useToast();
   const [orders, setOrders] = useState([]);
   const [openId, setOpenId] = useState(null);
   const [pickTable, setPickTable] = useState(null);
+  const [activeBooking, setActiveBooking] = useState(null);
   const [, setTick] = useState(0);
 
   const load = useCallback(async () => {
@@ -148,6 +162,17 @@ export default function TablesPage() {
 
   return (
     <>
+      <BookingsCard onUseBooking={(b) => { setActiveBooking(b); toast('Ab kisi free table par tap karein — ' + b.name + ' ke liye'); }} />
+
+      {activeBooking && (
+        <div className="card" style={{ borderColor: 'var(--accent)' }}>
+          <div className="bd" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ flex: 1 }}>Booking select hai: <b>{activeBooking.name}</b> — ab koi free table chunein.</span>
+            <button className="btn sm ghost" onClick={() => setActiveBooking(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
+
       <div className="card">
         <div className="hd"><h2>Tables</h2><div className="spacer"></div><span className="hint">{orders.filter(o => !o.reserved).length} occupied / {tables.length}</span></div>
         <div className="bd">
@@ -181,8 +206,8 @@ export default function TablesPage() {
         </div>
       </div>
 
-      <OpenTableSheet open={!!pickTable} table={pickTable} onClose={() => setPickTable(null)}
-        onOpened={(order) => { setOrders(prev => [...prev, order]); setPickTable(null); setOpenId(order._id); }} />
+      <OpenTableSheet open={!!pickTable} table={pickTable} booking={activeBooking} onClose={() => setPickTable(null)}
+        onOpened={(order) => { setOrders(prev => [...prev, order]); setPickTable(null); setActiveBooking(null); setOpenId(order._id); }} />
     </>
   );
 }

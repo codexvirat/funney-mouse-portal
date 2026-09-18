@@ -1,6 +1,7 @@
 const asyncHandler = require('../utils/asyncHandler');
 const TableOrder = require('../models/TableOrder');
 const Config = require('../models/Config');
+const Booking = require('../models/Booking');
 const { priceForMinutes } = require('../utils/pricing');
 const { finalizeBill } = require('./billController');
 
@@ -10,7 +11,7 @@ exports.listTableOrders = asyncHandler(async (req, res) => {
 });
 
 exports.openTable = asyncHandler(async (req, res) => {
-  const { tableId, tableName, phone, name, adults, kids, reserved, reservedNote, waiterName, advance, advanceMode } = req.body;
+  const { tableId, tableName, phone, name, adults, kids, reserved, reservedNote, waiterName, advance, advanceMode, bookingId } = req.body;
   if (!tableId) {
     res.status(400);
     throw new Error('Table select karein');
@@ -34,6 +35,9 @@ exports.openTable = asyncHandler(async (req, res) => {
     openedAt: new Date().toISOString(),
     openedBy: req.user.username
   });
+  if (bookingId) {
+    await Booking.findByIdAndUpdate(bookingId, { status: 'used', usedTableId: tableId });
+  }
   res.status(201).json({ order });
 });
 

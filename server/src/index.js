@@ -13,6 +13,7 @@ const billRoutes = require('./routes/billRoutes');
 const memberRoutes = require('./routes/memberRoutes');
 const sessionRoutes = require('./routes/sessionRoutes');
 const tableOrderRoutes = require('./routes/tableOrderRoutes');
+const bookingRoutes = require('./routes/bookingRoutes');
 
 const app = express();
 app.use(cors());
@@ -26,6 +27,7 @@ app.use('/api/bills', billRoutes);
 app.use('/api/members', memberRoutes);
 app.use('/api/sessions', sessionRoutes);
 app.use('/api/table-orders', tableOrderRoutes);
+app.use('/api/bookings', bookingRoutes);
 
 // Serve the built React client (client/dist is copied into ./public at
 // Docker image build time — see the root Dockerfile). Any GET request that

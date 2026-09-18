@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import Sheet from './Sheet';
 import { INR } from '../utils/money';
 import { prettyDate, tstr } from '../utils/date';
@@ -51,17 +52,29 @@ function whatsappText(b, shopName) {
 }
 
 export default function ReceiptSheet({ open, bill, customer, config, onClose, doneLabel = 'New bill' }) {
-  if (!bill) return <Sheet open={open} onClose={onClose}><div /></Sheet>;
-  const pays = Object.entries(bill.pay).filter(([, v]) => v > 0).map(([k, v]) => k + ' ' + INR(v)).join(' · ');
-  const sections = sectionRows(bill.items);
-
   const shopName = (config && config.shopName) || 'Funny Mouse';
 
   const print = () => {
     const area = document.getElementById('printarea');
-    if (area) area.innerHTML = receiptHTML(bill, shopName);
+    if (area && bill) area.innerHTML = receiptHTML(bill, shopName);
     window.print();
   };
+
+  // Print automatically as soon as the receipt is shown — payment mode
+  // (UPI/cash/card/due) shouldn't matter, a bill always needs a printout.
+  // Keyed on bill._id so re-renders (e.g. a poll elsewhere) don't reprint.
+  const printedFor = useRef(null);
+  useEffect(() => {
+    if (open && bill && printedFor.current !== bill._id) {
+      printedFor.current = bill._id;
+      print();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, bill]);
+
+  if (!bill) return <Sheet open={open} onClose={onClose}><div /></Sheet>;
+  const pays = Object.entries(bill.pay).filter(([, v]) => v > 0).map(([k, v]) => k + ' ' + INR(v)).join(' · ');
+  const sections = sectionRows(bill.items);
 
   const shareWhatsapp = () => {
     const text = encodeURIComponent(whatsappText(bill, shopName));
