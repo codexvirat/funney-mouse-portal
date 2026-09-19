@@ -6,8 +6,9 @@ import { rollup } from '../utils/report';
 import { exportCSV } from '../utils/csv';
 import ReportBreakdown from '../components/ReportBreakdown';
 import TableBreakdown from '../components/TableBreakdown';
+import EditBillSheet from '../components/EditBillSheet';
 
-function DayReport({ date, bills, t, onVoid, onSettle }) {
+function DayReport({ date, bills, t, onVoid, onSettle, onEdit }) {
   return (
     <>
       <div className="hero"><small>{prettyDate(date)}</small><b>{INR(t.total)}</b>
@@ -27,7 +28,8 @@ function DayReport({ date, bills, t, onVoid, onSettle }) {
                 {bills.map(b => (
                   <tr key={b._id} className={b.void ? 'void' : ''}>
                     <td>{b.no}</td><td>{tstr(b.ts)}</td>
-                    <td>{b.name || 'Walk-in'}{b.phone ? <><br /><span className="hint">{b.phone}</span></> : null}</td>
+                    <td>{b.name || 'Walk-in'}{b.phone ? <><br /><span className="hint">{b.phone}</span></> : null}
+                      {b.editedAt && <><br /><span className="hint">Edited</span></>}</td>
                     <td>{b.items.map((i, ix) => (<span key={ix}>{i.name}{i.qty > 1 ? ' ×' + i.qty : ''}<br /></span>))}</td>
                     <td style={{ textAlign: 'right' }}><b className="num">{INR(b.total)}</b></td>
                     <td>{Object.entries(b.pay).filter(([, v]) => v > 0).map(([k, v]) => (<span key={k}>{k} {INR(v)}<br /></span>))}</td>
@@ -35,6 +37,7 @@ function DayReport({ date, bills, t, onVoid, onSettle }) {
                       {b.void ? <span className="hint">Void</span> : (
                         <>
                           {b.pay.DUE > 0 && <button className="btn sm" onClick={() => onSettle(b)}>Due paid</button>}{' '}
+                          <button className="btn sm ghost" onClick={() => onEdit(b)}>Edit</button>{' '}
                           <button className="btn sm ghost" onClick={() => onVoid(b)}>Void</button>
                         </>
                       )}
@@ -86,6 +89,7 @@ export default function DayEndPage() {
   const [month, setMonth] = useState(dstr().slice(0, 7));
   const [bills, setBills] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(null);
 
   const load = async () => {
     setLoading(true);
@@ -131,8 +135,11 @@ export default function DayEndPage() {
       </div></div>
 
       {loading ? <p className="hint">Loading…</p> : mode === 'day'
-        ? <DayReport date={date} bills={bills} t={t} onVoid={voidBill} onSettle={settleDue} />
+        ? <DayReport date={date} bills={bills} t={t} onVoid={voidBill} onSettle={settleDue} onEdit={setEditing} />
         : <MonthReport month={month} bills={bills} t={t} />}
+
+      <EditBillSheet open={!!editing} bill={editing} onClose={() => setEditing(null)}
+        onSaved={() => { setEditing(null); load(); }} />
     </>
   );
 }

@@ -213,6 +213,81 @@ exports.getBills = asyncHandler(async (req, res) => {
   res.json({ bills });
 });
 
+// Lets admin correct a mistake (wrong item/qty/discount/payment mode) on an
+// already-saved bill without voiding it. Membership bills are excluded —
+// hoursLeft/expiry are consumed sequentially across bills, so editing one
+// after the fact could corrupt a customer's membership state; void + rebill
+// is the safe path there. memberDiscount/happyHourDiscount stay frozen at
+// whatever they were at original checkout (they were customer/time-dependent
+// "now" at that moment, not something to re-derive against today).
+exports.editBill = asyncHandler(async (req, res) => {
+  const bill = await Sale.findById(req.params.id);
+  if (!bill) {
+    res.status(404);
+    throw new Error('Bill not found');
+  }
+  if (bill.void) {
+    res.status(400);
+    throw new Error('Void bill edit nahi ho sakta');
+  }
+  const hasMembership = bill.items.some(i => i.cat === 'member' || (i.meta && i.meta.member));
+  if (hasMembership) {
+    res.status(400);
+    throw new Error('Membership wale bill edit nahi ho sakte — void karke naya bill banayein');
+  }
+
+  const { items, discount, discountType, pay } = req.body;
+  if (!Array.isArray(items) || !items.length) {
+    res.status(400);
+    throw new Error('Bill me items chahiye');
+  }
+  const itemsClean = cleanItems(items);
+
+  const cfg = await Config.findOne();
+  const { cgst, sgst } = computeGST(itemsClean, cfg);
+  const { subtotal, discount: disc, memberDiscount, happyHourDiscount, total } =
+    computeTotals(itemsClean, discount, discountType, bill.memberDiscount, bill.happyHourDiscount, cgst, sgst);
+
+  const payClean = {
+    UPI: Number(pay && pay.UPI) || 0,
+    CASH: Number(pay && pay.CASH) || 0,
+    CARD: Number(pay && pay.CARD) || 0,
+    DUE: Number(pay && pay.DUE) || 0
+  };
+  const paidSum = payClean.UPI + payClean.CASH + payClean.CARD + payClean.DUE;
+  if (Math.round(paidSum) !== Math.round(total)) {
+    res.status(400);
+    throw new Error('Payment split total se match nahi karta');
+  }
+
+  const oldTotal = bill.total;
+  const kids = itemsClean.filter(i => i.cat === 'play').reduce((a, i) => a + (i.meta && i.meta.kids || 0), 0);
+
+  bill.items = itemsClean;
+  bill.subtotal = subtotal;
+  bill.discount = disc;
+  bill.memberDiscount = memberDiscount;
+  bill.happyHourDiscount = happyHourDiscount;
+  bill.cgst = cgst;
+  bill.sgst = sgst;
+  bill.total = total;
+  bill.pay = payClean;
+  bill.kids = kids;
+  bill.editedAt = new Date().toISOString();
+  await bill.save();
+
+  if (bill.phone) {
+    const customer = await Customer.findOne({ phone: bill.phone });
+    if (customer) {
+      customer.totalSpend = Math.max(0, (customer.totalSpend || 0) - oldTotal + total);
+      customer.recent = (customer.recent || []).map(r => r.billId === String(bill._id) ? { ...r, total } : r);
+      await customer.save();
+    }
+  }
+
+  res.json({ bill });
+});
+
 exports.voidBill = asyncHandler(async (req, res) => {
   const bill = await Sale.findById(req.params.id);
   if (!bill) {

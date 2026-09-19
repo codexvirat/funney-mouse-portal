@@ -78,7 +78,8 @@ function DayReport({ date, bills, t }) {
                   <tr key={b._id} className={b.void ? 'void' : ''}>
                     <td>{b.no}</td><td>{tstr(b.ts)}</td>
                     <td>{b.name || 'Walk-in'}{b.phone ? <><br /><span className="hint">{b.phone}</span></> : null}
-                      {b.advance > 0 && <><br /><span className="hint">Advance {INR(b.advance)}</span></>}</td>
+                      {b.advance > 0 && <><br /><span className="hint">Advance {INR(b.advance)}</span></>}
+                      {b.editedAt && <><br /><span className="hint">Edited</span></>}</td>
                     <td>{b.items.map((i, ix) => (<span key={ix}>{i.name}{i.qty > 1 ? ' ×' + i.qty : ''}<br /></span>))}</td>
                     <td style={{ textAlign: 'right' }}><b className="num">{INR(b.total)}</b></td>
                     <td>{b.void ? <span className="hint">Void</span> : Object.entries(b.pay).filter(([, v]) => v > 0).map(([k, v]) => (<span key={k}>{k} {INR(v)}<br /></span>))}</td>

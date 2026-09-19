@@ -42,7 +42,8 @@ const saleSchema = new mongoose.Schema({
   void: { type: Boolean, default: false },
   voidReason: { type: String, default: '' },
   voidAt: { type: String, default: '' },
-  dueSettledAt: { type: String, default: '' }
+  dueSettledAt: { type: String, default: '' },
+  editedAt: { type: String, default: '' }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Sale', saleSchema);
