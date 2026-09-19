@@ -15,6 +15,18 @@ export default function ReportBreakdown({ t }) {
           </div>
         ))}
         {t.memberPlayMins > 0 && <p className="hint" style={{ margin: '10px 0 0' }}>Member play (free): {Math.round(t.memberPlayMins / 60 * 10) / 10} kid-hours</p>}
+        {(t.cgst > 0 || t.sgst > 0) && (
+          <div style={{ marginTop: 12, paddingTop: 11, borderTop: '1px solid var(--line)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="hint">CGST</span><b className="num">{INR(t.cgst)}</b></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}><span className="hint">SGST</span><b className="num">{INR(t.sgst)}</b></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}><span className="hint">Total GST</span><b className="num">{INR(t.cgst + t.sgst)}</b></div>
+          </div>
+        )}
+        {t.advance > 0 && (
+          <div style={{ marginTop: 12, paddingTop: 11, borderTop: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between' }}>
+            <span className="hint">Advance collected</span><b className="num">{INR(t.advance)}</b>
+          </div>
+        )}
       </div></div>
       <div className="card"><div className="hd"><h2>Payment mode</h2></div><div className="bd">
         {pays.map(([l, k, c]) => (

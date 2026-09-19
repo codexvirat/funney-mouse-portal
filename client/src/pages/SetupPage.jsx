@@ -145,6 +145,16 @@ export default function SetupPage() {
         </div>
       </div></div>
 
+      <div className="card"><div className="hd"><h2>Food GST</h2></div><div className="bd">
+        <div className="row">
+          <label className="f" style={{ margin: 0, flex: '1 1 140px' }}><span>CGST %</span>
+            <input type="number" min="0" max="100" step="0.1" value={form.cgstPercent || 0} onChange={e => setField('cgstPercent', Number(e.target.value) || 0)} /></label>
+          <label className="f" style={{ margin: 0, flex: '1 1 140px' }}><span>SGST %</span>
+            <input type="number" min="0" max="100" step="0.1" value={form.sgstPercent || 0} onChange={e => setField('sgstPercent', Number(e.target.value) || 0)} /></label>
+        </div>
+        <p className="hint" style={{ margin: '10px 0 0' }}>Sirf Food items ke subtotal par lagta hai — Play/Socks/Membership tax-free rahenge. Receipt aur reports dono me CGST/SGST alag line me dikhega.</p>
+      </div></div>
+
       <div className="card"><div className="hd"><h2>Happy hour</h2></div><div className="bd">
         <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
           <input type="checkbox" checked={!!happyHour.enabled} onChange={e => setHappyHour('enabled', e.target.checked)} style={{ width: 18, height: 18 }} />

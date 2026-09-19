@@ -28,7 +28,7 @@ function cleanItems(items) {
 // are auto-applied amounts (already computed upstream on the food+play
 // subtotal). All three stack, capped so together they never exceed the bill
 // subtotal.
-function computeTotals(items, manualDiscount, discountType, memberDiscountAmt, happyHourAmt) {
+function computeTotals(items, manualDiscount, discountType, memberDiscountAmt, happyHourAmt, cgst, sgst) {
   const subtotal = items.reduce((a, i) => a + Number(i.amount || 0), 0);
   let manual = discountType === 'pct'
     ? Math.round(subtotal * (Number(manualDiscount) || 0) / 100)
@@ -37,16 +37,15 @@ function computeTotals(items, manualDiscount, discountType, memberDiscountAmt, h
   const memberDiscount = Math.max(0, Math.min(subtotal, Number(memberDiscountAmt) || 0));
   const happyHourDiscount = Math.max(0, Math.min(subtotal, Number(happyHourAmt) || 0));
   const discount = Math.min(subtotal, manual + memberDiscount + happyHourDiscount);
-  const total = Math.max(0, subtotal - discount);
-  return { subtotal, discount, memberDiscount, happyHourDiscount, total };
+  const total = Math.max(0, subtotal - discount) + cgst + sgst;
+  return { subtotal, discount, memberDiscount, happyHourDiscount, cgst, sgst, total };
 }
 
 // Auto-discounts (membership %, happy hour) depend only on the item list and
 // customer/config state — computed here so the /preview endpoint and the
 // real checkout always agree on the same numbers.
-async function computeAutoDiscounts(itemsClean, customer) {
+async function computeAutoDiscounts(itemsClean, customer, cfg) {
   const eligible = itemsClean.filter(i => i.cat === 'food' || i.cat === 'play').reduce((a, i) => a + i.amount, 0);
-  const cfg = await Config.findOne();
 
   let memberDiscountAmt = 0;
   if (customer && memberActive(customer) && cfg) {
@@ -68,6 +67,19 @@ async function computeAutoDiscounts(itemsClean, customer) {
   return { memberDiscountAmt, happyHourAmt };
 }
 
+// GST applies only on food items (CGST + SGST, configured as separate
+// percentages though normally equal) — Play/Socks/Membership stay tax-free.
+// Computed on the gross food subtotal, same as the auto-discounts above.
+function computeGST(itemsClean, cfg) {
+  const foodSubtotal = itemsClean.filter(i => i.cat === 'food').reduce((a, i) => a + i.amount, 0);
+  const cgstPercent = (cfg && Number(cfg.cgstPercent)) || 0;
+  const sgstPercent = (cfg && Number(cfg.sgstPercent)) || 0;
+  return {
+    cgst: Math.round(foodSubtotal * cgstPercent / 100),
+    sgst: Math.round(foodSubtotal * sgstPercent / 100)
+  };
+}
+
 // Shared by the quick-bill flow (createBill) and the table checkout flow —
 // turns a set of items + discount + payment split into a saved Sale and
 // updates the attached Customer (visits/spend/membership).
@@ -87,9 +99,11 @@ async function finalizeBill({ phone, name, items, discount, discountType, pay, s
     if (name) customer.name = name;
   }
 
-  const { memberDiscountAmt, happyHourAmt } = await computeAutoDiscounts(itemsClean, customer);
+  const cfg = await Config.findOne();
+  const { memberDiscountAmt, happyHourAmt } = await computeAutoDiscounts(itemsClean, customer, cfg);
+  const { cgst, sgst } = computeGST(itemsClean, cfg);
 
-  const { subtotal, discount: disc, memberDiscount, happyHourDiscount, total } = computeTotals(itemsClean, discount, discountType, memberDiscountAmt, happyHourAmt);
+  const { subtotal, discount: disc, memberDiscount, happyHourDiscount, total } = computeTotals(itemsClean, discount, discountType, memberDiscountAmt, happyHourAmt, cgst, sgst);
 
   const payClean = {
     UPI: Number(pay && pay.UPI) || 0,
@@ -111,7 +125,7 @@ async function finalizeBill({ phone, name, items, discount, discountType, pay, s
   const bill = await Sale.create({
     date, no, ts: new Date().toISOString(),
     phone: phone || '', name: name || 'Walk-in',
-    items: itemsClean, subtotal, discount: disc, memberDiscount, happyHourDiscount, total, pay: payClean, kids,
+    items: itemsClean, subtotal, discount: disc, memberDiscount, happyHourDiscount, cgst, sgst, total, pay: payClean, kids,
     staff, void: false,
     ...(extra || {})
   });
@@ -163,8 +177,10 @@ exports.previewDiscount = asyncHandler(async (req, res) => {
   const itemsClean = cleanItems(Array.isArray(items) ? items : []);
   const subtotal = itemsClean.reduce((a, i) => a + i.amount, 0);
   const customer = phone ? await Customer.findOne({ phone }) : null;
-  const { memberDiscountAmt, happyHourAmt } = await computeAutoDiscounts(itemsClean, customer);
-  res.json({ subtotal, memberDiscount: memberDiscountAmt, happyHourDiscount: happyHourAmt });
+  const cfg = await Config.findOne();
+  const { memberDiscountAmt, happyHourAmt } = await computeAutoDiscounts(itemsClean, customer, cfg);
+  const { cgst, sgst } = computeGST(itemsClean, cfg);
+  res.json({ subtotal, memberDiscount: memberDiscountAmt, happyHourDiscount: happyHourAmt, cgst, sgst });
 });
 
 exports.createBill = asyncHandler(async (req, res) => {
@@ -179,16 +195,20 @@ exports.createBill = asyncHandler(async (req, res) => {
 });
 
 exports.getBills = asyncHandler(async (req, res) => {
-  const { date, month } = req.query;
+  const { date, month, from, to } = req.query;
   let bills;
   if (date) {
     bills = await Sale.find({ date }).sort('no');
   } else if (month) {
-    const from = month + '-01', to = month + '-31';
+    const mfrom = month + '-01', mto = month + '-31';
+    bills = await Sale.find({ date: { $gte: mfrom, $lte: mto } }).sort({ date: 1, no: 1 });
+  } else if (from && to) {
+    // Generic range query — powers week / last-3-months / yearly / custom
+    // date-range reports, all of which the frontend reduces to a from/to pair.
     bills = await Sale.find({ date: { $gte: from, $lte: to } }).sort({ date: 1, no: 1 });
   } else {
     res.status(400);
-    throw new Error('date ya month query chahiye');
+    throw new Error('date, month ya from/to query chahiye');
   }
   res.json({ bills });
 });

@@ -32,6 +32,8 @@ const saleSchema = new mongoose.Schema({
   tableName: { type: String, default: '' },
   memberDiscount: { type: Number, default: 0 },
   happyHourDiscount: { type: Number, default: 0 },
+  cgst: { type: Number, default: 0 },
+  sgst: { type: Number, default: 0 },
   waiterName: { type: String, default: '' },
   advance: { type: Number, default: 0 },
   advanceMode: { type: String, default: '' },

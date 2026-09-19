@@ -1,5 +1,5 @@
 export function emptyTotals() {
-  return { food: 0, play: 0, socks: 0, member: 0, UPI: 0, CASH: 0, CARD: 0, DUE: 0, total: 0, bills: 0, kids: 0, disc: 0, memberPlayMins: 0 };
+  return { food: 0, play: 0, socks: 0, member: 0, UPI: 0, CASH: 0, CARD: 0, DUE: 0, total: 0, bills: 0, kids: 0, disc: 0, memberPlayMins: 0, cgst: 0, sgst: 0, advance: 0 };
 }
 
 export function rollup(bills) {
@@ -7,6 +7,7 @@ export function rollup(bills) {
   bills.forEach(b => {
     if (b.void) return;
     t.bills++; t.total += b.total; t.kids += b.kids || 0; t.disc += b.discount || 0;
+    t.cgst += b.cgst || 0; t.sgst += b.sgst || 0; t.advance += b.advance || 0;
     ['UPI', 'CASH', 'CARD', 'DUE'].forEach(k => { t[k] += (b.pay && b.pay[k]) || 0; });
     b.items.forEach(i => {
       t[i.cat] = (t[i.cat] || 0) + i.amount;

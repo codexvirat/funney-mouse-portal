@@ -33,6 +33,8 @@ function receiptHTML(b, shopName) {
     ${b.memberDiscount ? `<tr><td>Member discount</td><td class="rt">− ${INR(b.memberDiscount)}</td></tr>` : ''}
     ${b.happyHourDiscount ? `<tr><td>Happy hour</td><td class="rt">− ${INR(b.happyHourDiscount)}</td></tr>` : ''}
     ${otherDisc > 0 ? `<tr><td>Discount</td><td class="rt">− ${INR(otherDisc)}</td></tr>` : ''}
+    ${b.cgst ? `<tr><td>CGST</td><td class="rt">${INR(b.cgst)}</td></tr>` : ''}
+    ${b.sgst ? `<tr><td>SGST</td><td class="rt">${INR(b.sgst)}</td></tr>` : ''}
     <tr><td><b>Total</b></td><td class="rt"><b>${INR(b.total)}</b></td></tr>
     <tr><td colspan="2" style="font-size:11px">${pays}</td></tr></table><hr>
     <div style="text-align:center;font-size:11px">Thank you! Phir aaiyega 🧀</div>`;
@@ -47,6 +49,8 @@ function whatsappText(b, shopName) {
   });
   lines.push(`Subtotal: ${INR(b.subtotal)}`);
   if (b.discount > 0) lines.push(`Discount: − ${INR(b.discount)}`);
+  if (b.cgst) lines.push(`CGST: ${INR(b.cgst)}`);
+  if (b.sgst) lines.push(`SGST: ${INR(b.sgst)}`);
   lines.push(`Total: ${INR(b.total)}`, '', 'Thank you! Phir aaiyega 🧀');
   return lines.join('\n');
 }
@@ -94,6 +98,9 @@ export default function ReceiptSheet({ open, bill, customer, config, onClose, do
         )}
         {bill.happyHourDiscount > 0 && (
           <p className="hint" style={{ margin: '4px 0 0' }}>Happy hour discount: − {INR(bill.happyHourDiscount)}</p>
+        )}
+        {(bill.cgst > 0 || bill.sgst > 0) && (
+          <p className="hint" style={{ margin: '4px 0 0' }}>GST: CGST {INR(bill.cgst)} + SGST {INR(bill.sgst)}</p>
         )}
         {bill.advance > 0 && (
           <p className="hint" style={{ margin: '4px 0 0' }}>Advance collected earlier: {INR(bill.advance)} ({bill.advanceMode})</p>

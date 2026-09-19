@@ -45,6 +45,12 @@ export default function BillItemsCard({ items, removeItem, discount, setDiscount
         {autoDiscount && autoDiscount.happyHourDiscount > 0 && (
           <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--sky)' }}><span>Happy hour</span><b className="num">− {INR(autoDiscount.happyHourDiscount)}</b></div>
         )}
+        {autoDiscount && autoDiscount.cgst > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="hint">CGST</span><b className="num">{INR(autoDiscount.cgst)}</b></div>
+        )}
+        {autoDiscount && autoDiscount.sgst > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="hint">SGST</span><b className="num">{INR(autoDiscount.sgst)}</b></div>
+        )}
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 17 }}><b>Total</b><b className="num">{INR(total)}</b></div>
       </div>
     </>

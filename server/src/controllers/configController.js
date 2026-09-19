@@ -31,7 +31,9 @@ const DEFAULT_CFG = {
   tables: [],
   memberDiscountPercent: 0,
   memberDiscountMinSpend: 0,
-  happyHour: { enabled: false, start: '15:00', end: '18:00', discountPercent: 0 }
+  happyHour: { enabled: false, start: '15:00', end: '18:00', discountPercent: 0 },
+  cgstPercent: 2.5,
+  sgstPercent: 2.5
 };
 
 async function getOrCreateConfig() {
@@ -47,7 +49,7 @@ exports.getConfig = asyncHandler(async (req, res) => {
 
 exports.updateConfig = asyncHandler(async (req, res) => {
   const cfg = await getOrCreateConfig();
-  const fields = ['shopName', 'staffDiscount', 'playSlabs', 'extraHalfHour', 'sockPrice', 'adultFree', 'menu', 'plans', 'tables', 'memberDiscountPercent', 'memberDiscountMinSpend', 'happyHour'];
+  const fields = ['shopName', 'staffDiscount', 'playSlabs', 'extraHalfHour', 'sockPrice', 'adultFree', 'menu', 'plans', 'tables', 'memberDiscountPercent', 'memberDiscountMinSpend', 'happyHour', 'cgstPercent', 'sgstPercent'];
   fields.forEach(f => {
     if (req.body[f] !== undefined) cfg[f] = req.body[f];
   });

@@ -24,7 +24,9 @@ const configSchema = new mongoose.Schema({
   tables: { type: [tableSchema], default: [] },
   memberDiscountPercent: { type: Number, default: 0 },
   memberDiscountMinSpend: { type: Number, default: 0 },
-  happyHour: { type: happyHourSchema, default: () => ({}) }
+  happyHour: { type: happyHourSchema, default: () => ({}) },
+  cgstPercent: { type: Number, default: 2.5 },
+  sgstPercent: { type: Number, default: 2.5 }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Config', configSchema);
