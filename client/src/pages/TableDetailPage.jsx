@@ -270,7 +270,10 @@ export default function TableDetailPage({ order, config, freeTables, otherOrders
   const initialNote = order.advance > 0 ? `Advance ${INR(order.advance)} (${order.advanceMode}) pehle hi collect ho chuka hai.` : undefined;
 
   const onSaveBill = async (pay) => {
-    const { data } = await api.post(`/table-orders/${order._id}/checkout`, { discount, discountType, pay, redeemPoints });
+    const { data } = await api.post(`/table-orders/${order._id}/checkout`, {
+      discount, discountType, pay, redeemPoints,
+      kid: (cust && cust.kid) || '', kidDob: (cust && cust.kidDob) || '', anniversary: (cust && cust.anniversary) || ''
+    });
     setLastBill(data.bill); setLastCust(data.customer);
     setSheet('receipt');
   };

@@ -21,6 +21,7 @@ const customerSchema = new mongoose.Schema({
   name: { type: String, default: '' },
   kid: { type: String, default: '' },
   kidDob: { type: String, default: '' },
+  anniversary: { type: String, default: '' },
   points: { type: Number, default: 0 },
   visits: { type: Number, default: 0 },
   totalSpend: { type: Number, default: 0 },

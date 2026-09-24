@@ -1,45 +1,90 @@
 import { useEffect, useState } from 'react';
 import api from '../api/client';
 import { INR } from '../utils/money';
-import { prettyDate, dayMonth } from '../utils/date';
+import { prettyDate, dayMonth, dstr } from '../utils/date';
 import { useConfig } from '../context/ConfigContext';
 import { openWhatsApp } from '../utils/notify';
+import MonthCalendar from '../components/MonthCalendar';
 
-function BirthdaysCard({ onOpen }) {
+function years(since, date) {
+  return Number(date.slice(0, 4)) - Number(since.slice(0, 4));
+}
+
+function ordinal(n) {
+  const t = n % 100;
+  if (t >= 11 && t <= 13) return n + 'th';
+  return n + ({ 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] || 'th');
+}
+
+// Calendar of kids' birthdays and anniversaries (by day-month, any year).
+// Tapping a date lists that day's people with a ready WhatsApp wish.
+function OccasionsCalendar({ onOpen }) {
   const { config } = useConfig();
-  const [days, setDays] = useState(7);
-  const [list, setList] = useState(null);
   const shop = (config && config.shopName) || 'Funny Mouse';
+  const [month, setMonth] = useState(dstr().slice(0, 7));
+  const [selected, setSelected] = useState(dstr());
+  const [list, setList] = useState(null);
 
   useEffect(() => {
-    api.get('/customers/birthdays', { params: { days } }).then(({ data }) => setList(data.birthdays)).catch(() => setList([]));
-  }, [days]);
+    setList(null);
+    api.get('/customers/occasions', { params: { month: month.slice(5) } })
+      .then(({ data }) => setList(data.occasions))
+      .catch(() => setList([]));
+  }, [month]);
 
-  const wish = (b) => {
-    const kid = b.kid || 'aapke bachche';
-    openWhatsApp(b.phone, `Namaste ${b.name || ''}! 🎉 ${shop} ki taraf se ${kid} ko ${b.inDays === 0 ? 'aaj' : dayMonth(b.date) + ' ko'} birthday ki advance me dher saari badhaai! 🎂\n\nBirthday party ya special play ke liye ${shop} me aaiye — birthday kid ke liye special offer hai. Booking ke liye reply karein.`);
+  const changeMonth = (m) => { setMonth(m); setSelected(null); };
+  const byDay = {};
+  (list || []).forEach(o => { (byDay[o.day] = byDay[o.day] || []).push(o); });
+  const dayList = selected && selected.slice(0, 7) === month ? (byDay[selected.slice(8)] || []) : [];
+
+  const wish = (o, date) => {
+    const when = date === dstr() ? 'aaj' : dayMonth(date) + ' ko';
+    const n = years(o.since, date);
+    const text = o.type === 'birthday'
+      ? `Namaste ${o.name || ''}! 🎉 ${shop} ki taraf se ${o.kid || 'aapke bachche'} ko ${when}${n > 0 ? ` ${ordinal(n)}` : ''} birthday ki dher saari badhaai! 🎂\n\nBirthday party ya special play ke liye ${shop} me aaiye — birthday kid ke liye special offer hai. Booking ke liye reply karein.`
+      : `Namaste ${o.name || ''}! 💍 ${shop} ki taraf se aapko ${when}${n > 0 ? ` ${ordinal(n)}` : ''} wedding anniversary ki bahut bahut badhaai! 🎉\n\nFamily ke saath celebrate karne ${shop} aaiye — anniversary par special offer hai. Reply karke table book karein.`;
+    openWhatsApp(o.phone, text);
   };
+
+  const mark = (d) => {
+    const items = byDay[d.slice(8)];
+    if (!items) return null;
+    const b = items.filter(o => o.type === 'birthday').length;
+    const a = items.length - b;
+    return <small className="calmark">{b ? '🎂' + (b > 1 ? b : '') : ''}{a ? '💍' + (a > 1 ? a : '') : ''}</small>;
+  };
+
+  const total = (list || []).length;
 
   return (
     <div className="card">
-      <div className="hd"><h2>🎂 Aane wale birthdays</h2><div className="spacer"></div>
-        <select value={days} onChange={e => setDays(Number(e.target.value))} style={{ width: 'auto', padding: '6px 10px' }}>
-          <option value={7}>7 din</option><option value={15}>15 din</option><option value={30}>30 din</option>
-        </select>
+      <div className="hd"><h2>🎂 Birthday &amp; 💍 Anniversary calendar</h2><div className="spacer"></div>
+        {list && <span className="hint">Is mahine {total}</span>}
       </div>
       <div className="bd">
-        {list === null ? <p className="hint" style={{ margin: 0 }}>Loading…</p> : !list.length ? (
-          <p className="hint" style={{ margin: 0 }}>Is period me koi birthday nahi. Bill banate waqt customer me "Child ka birthday" bhar dijiye.</p>
-        ) : list.map(b => (
-          <div className="sess" key={b.phone} style={{ background: 'var(--accent-soft)', borderColor: 'var(--accent)' }}>
-            <span style={{ flex: 1, minWidth: 0 }}>
-              <b>{b.kid || 'Child'}</b>{b.age > 0 ? <span className="hint"> · {b.age} saal</span> : null}<br />
-              <span className="hint">{b.inDays === 0 ? 'Aaj!' : b.inDays === 1 ? 'Kal' : dayMonth(b.date) + ' (' + b.inDays + ' din me)'} · {b.name || 'Parent'} · {b.phone}</span>
-            </span>
-            <button className="btn sm dark" onClick={() => wish(b)}>WhatsApp wish</button>
-            <button className="btn sm ghost" onClick={() => onOpen(b.phone)}>Details</button>
-          </div>
-        ))}
+        <MonthCalendar month={month} onMonth={changeMonth} selected={selected} onSelect={setSelected} renderMark={mark} />
+        {list === null ? <p className="hint" style={{ margin: 0 }}>Loading…</p> : !selected ? (
+          <p className="hint" style={{ margin: 0 }}>Kisi date par tap karein — us din ke birthday aur anniversary yahan dikhenge.</p>
+        ) : !dayList.length ? (
+          <p className="hint" style={{ margin: 0 }}>{prettyDate(selected)} ko koi birthday ya anniversary nahi.{!total ? ' Billing me customer ka "Child ka birthday" aur "Anniversary" bharte rahiye.' : ''}</p>
+        ) : (
+          <>
+            <p className="hint" style={{ margin: '0 0 8px' }}>{prettyDate(selected)}</p>
+            {dayList.map(o => (
+              <div className="sess" key={o.type + o.phone}
+                style={o.type === 'birthday' ? { background: 'var(--accent-soft)', borderColor: 'var(--accent)' } : { background: 'var(--berry-soft)', borderColor: 'var(--berry)' }}>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  {o.type === 'birthday'
+                    ? <><b>🎂 {o.kid || 'Child'} ka birthday</b>{years(o.since, selected) > 0 ? <span className="hint"> · {years(o.since, selected)} saal</span> : null}</>
+                    : <><b>💍 {o.name || 'Customer'} ki anniversary</b>{years(o.since, selected) > 0 ? <span className="hint"> · {years(o.since, selected)} saal</span> : null}</>}
+                  <br /><span className="hint">{o.name || 'Parent'} · {o.phone}</span>
+                </span>
+                <button className="btn sm dark" onClick={() => wish(o, selected)}>WhatsApp wish</button>
+                <button className="btn sm ghost" onClick={() => onOpen(o.phone)}>Details</button>
+              </div>
+            ))}
+          </>
+        )}
       </div>
     </div>
   );
@@ -66,7 +111,7 @@ export default function CustomersPage({ initialQuery, onBillThis, onMemThis }) {
 
   return (
     <>
-      <BirthdaysCard onOpen={open} />
+      <OccasionsCalendar onOpen={open} />
 
       <div className="card"><div className="bd">
         <label className="f" style={{ margin: 0 }}><span>Phone number se dhoondhein</span>
@@ -94,7 +139,7 @@ export default function CustomersPage({ initialQuery, onBillThis, onMemThis }) {
               <div className="stat"><small>Last visit</small><b style={{ fontSize: 15 }}>{cust.lastVisit ? prettyDate(cust.lastVisit).replace(/, \d{4}/, '') : '—'}</b></div>
               {cust.points > 0 && <div className="stat"><small>Loyalty points</small><b>{cust.points}</b></div>}
             </div>
-            <div className="hint" style={{ marginBottom: 10 }}>{cust.phone}{cust.kid ? ' · child: ' + cust.kid : ''}{cust.kidDob ? ' · birthday ' + dayMonth(cust.kidDob) : ''}</div>
+            <div className="hint" style={{ marginBottom: 10 }}>{cust.phone}{cust.kid ? ' · child: ' + cust.kid : ''}{cust.kidDob ? ' · 🎂 ' + dayMonth(cust.kidDob) : ''}{cust.anniversary ? ' · 💍 ' + dayMonth(cust.anniversary) : ''}</div>
             {cust.membership && (
               <div className="custfound" style={{ marginBottom: 14, background: 'var(--grape-soft)', borderColor: 'var(--grape)' }}>
                 <div className="av" style={{ background: 'var(--grape)' }}>M</div>

@@ -205,6 +205,7 @@ table.tb tr.void td{opacity:.45;text-decoration:line-through}
 .cald.has{border-color:var(--accent);background:var(--accent-soft);font-weight:700}
 .cald.today{outline:2px solid var(--grape);outline-offset:-2px}
 .cald[aria-pressed="true"]{background:var(--text);color:var(--bg)}
+.calmark{display:block;font-size:10px;line-height:1.1;margin-top:1px;white-space:nowrap}
 .cald i{position:absolute;top:-6px;right:-4px;font-style:normal;font-size:10px;background:var(--berry);color:#fff;border-radius:99px;min-width:16px;height:16px;line-height:16px}
 
 /* login */

@@ -97,7 +97,7 @@ function computeGST(itemsClean, cfg) {
 // Shared by the quick-bill flow (createBill) and the table checkout flow —
 // turns a set of items + discount + payment split into a saved Sale and
 // updates the attached Customer (visits/spend/membership).
-async function finalizeBill({ phone, name, items, discount, discountType, pay, staff, extra, redeemPoints }) {
+async function finalizeBill({ phone, name, kid, kidDob, anniversary, items, discount, discountType, pay, staff, extra, redeemPoints }) {
   if (!Array.isArray(items) || !items.length) {
     const err = new Error('Bill me items chahiye');
     err.status = 400;
@@ -111,6 +111,11 @@ async function finalizeBill({ phone, name, items, discount, discountType, pay, s
     customer = await Customer.findOne({ phone });
     if (!customer) customer = new Customer({ phone, name: '', kid: '', visits: 0, totalSpend: 0, recent: [], membership: null });
     if (name) customer.name = name;
+    // Child's name/birthday and anniversary typed on the billing screen — only ever fill in
+    // or update, never wipe what's already on record.
+    if (kid) customer.kid = String(kid).slice(0, 60);
+    if (kidDob && /^\d{4}-\d{2}-\d{2}$/.test(kidDob)) customer.kidDob = kidDob;
+    if (anniversary && /^\d{4}-\d{2}-\d{2}$/.test(anniversary)) customer.anniversary = anniversary;
   }
 
   const cfg = await Config.findOne();
@@ -212,9 +217,9 @@ exports.previewDiscount = asyncHandler(async (req, res) => {
 });
 
 exports.createBill = asyncHandler(async (req, res) => {
-  const { phone, name, items, discount, discountType, pay, redeemPoints } = req.body;
+  const { phone, name, kid, kidDob, anniversary, items, discount, discountType, pay, redeemPoints } = req.body;
   try {
-    const { bill, customer } = await finalizeBill({ phone, name, items, discount, discountType, pay, redeemPoints, staff: req.user.username });
+    const { bill, customer } = await finalizeBill({ phone, name, kid, kidDob, anniversary, items, discount, discountType, pay, redeemPoints, staff: req.user.username });
     res.status(201).json({ bill, customer });
   } catch (e) {
     res.status(e.status || 500);

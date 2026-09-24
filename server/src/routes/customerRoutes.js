@@ -4,7 +4,7 @@ const ctrl = require('../controllers/customerController');
 
 const floor = allowRoles('admin', 'staff');
 
-router.get('/birthdays', protect, floor, ctrl.upcomingBirthdays);
+router.get('/occasions', protect, floor, ctrl.occasions);
 router.get('/:phone', protect, floor, ctrl.getByPhone);
 router.patch('/:phone', protect, floor, ctrl.updateCustomer);
 

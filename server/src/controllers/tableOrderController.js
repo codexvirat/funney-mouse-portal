@@ -177,11 +177,11 @@ exports.checkoutTable = asyncHandler(async (req, res) => {
     res.status(404);
     throw new Error('Table order not found');
   }
-  const { discount, discountType, pay, redeemPoints } = req.body;
+  const { discount, discountType, pay, redeemPoints, kid, kidDob, anniversary } = req.body;
   const durationMins = Math.max(0, Math.round((Date.now() - new Date(order.openedAt).getTime()) / 60000));
   try {
     const { bill, customer } = await finalizeBill({
-      phone: order.phone, name: order.name, items: order.items,
+      phone: order.phone, name: order.name, kid, kidDob, anniversary, items: order.items,
       discount, discountType, pay, redeemPoints, staff: req.user.username,
       extra: {
         tableId: order.tableId, tableName: order.tableName, adults: order.adults,

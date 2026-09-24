@@ -114,6 +114,7 @@ export default function BillPage({ billIntent, onConsumeIntent }) {
       phone: (cust && cust.phone) || '',
       name: (cust && cust.name) || 'Walk-in',
       items: items.map(({ id, ...rest }) => rest),
+      kid: (cust && cust.kid) || '', kidDob: (cust && cust.kidDob) || '', anniversary: (cust && cust.anniversary) || '',
       discount, discountType, pay, redeemPoints
     });
     setLastBill(data.bill); setLastCust(data.customer);

@@ -2,11 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 import api from '../api/client';
 import { useToast } from '../context/ToastContext';
 import { INR } from '../utils/money';
-import { prettyDate, dstr, addMonths } from '../utils/date';
+import { prettyDate, dstr } from '../utils/date';
 import { esc } from '../utils/html';
 import { openWhatsApp } from '../utils/notify';
 import { useConfig } from '../context/ConfigContext';
 import Sheet from './Sheet';
+import MonthCalendar from './MonthCalendar';
 
 const PAY_MODES = ['CASH', 'UPI', 'CARD'];
 
@@ -59,39 +60,9 @@ function reminderText(b, shopName) {
 // Month grid of pending bookings; tapping a day filters the list to it.
 function BookingCalendar({ bookings, selected, onSelect }) {
   const [month, setMonth] = useState(dstr().slice(0, 7));
-  const [y, m] = month.split('-').map(Number);
-  const first = new Date(y, m - 1, 1);
-  const daysIn = new Date(y, m, 0).getDate();
-  const lead = (first.getDay() + 6) % 7;
   const byDate = {};
   bookings.forEach(b => { byDate[b.eventDate] = (byDate[b.eventDate] || 0) + 1; });
-  const cells = [...Array(lead).fill(null), ...Array.from({ length: daysIn }, (_, i) => month + '-' + String(i + 1).padStart(2, '0'))];
-  const today = dstr();
-  return (
-    <div style={{ marginBottom: 12 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-        <button className="btn sm ghost" onClick={() => setMonth(addMonths(month + '-01', -1).slice(0, 7))}>‹</button>
-        <b style={{ flex: 1, textAlign: 'center' }}>{first.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}</b>
-        <button className="btn sm ghost" onClick={() => setMonth(addMonths(month + '-01', 1).slice(0, 7))}>›</button>
-      </div>
-      <div className="cal">
-        {['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map(d => <span key={d} className="hint">{d}</span>)}
-        {cells.map((d, ix) => d ? (
-          <button key={d} className={'cald' + (byDate[d] ? ' has' : '') + (d === today ? ' today' : '')} aria-pressed={selected === d}
-            onClick={() => onSelect(selected === d ? null : d)}>
-            {Number(d.slice(8))}{byDate[d] ? <i>{byDate[d]}</i> : null}
-          </button>
-        ) : <span key={'x' + ix} />)}
-      </div>
-    </div>
-  );
-}
-
-// Rough tables-needed guess from the average seating in Setup.
-function suggestTables(guests, tables) {
-  if (!guests || !tables.length) return 1;
-  const avg = tables.reduce((a, t) => a + (t.capacity || 4), 0) / tables.length;
-  return Math.max(1, Math.ceil(guests / avg));
+  return <MonthCalendar month={month} onMonth={setMonth} selected={selected} onSelect={onSelect} renderMark={d => byDate[d] ? <i>{byDate[d]}</i> : null} />;
 }
 
 function NewBookingSheet({ open, tables, onClose, onCreated }) {
