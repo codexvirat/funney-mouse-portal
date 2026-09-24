@@ -37,3 +37,9 @@ export function weekRange(s) {
   const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
   return { from: dstr(monday), to: dstr(sunday) };
 }
+
+// "5 Mar" — for birthdays, where the year doesn't matter.
+export function dayMonth(s) {
+  const [y, m, d] = s.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+}

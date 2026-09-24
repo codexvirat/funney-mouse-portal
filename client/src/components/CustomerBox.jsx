@@ -1,8 +1,30 @@
+import { useState } from 'react';
+import api from '../api/client';
+import { useToast } from '../context/ToastContext';
 import { INR } from '../utils/money';
-import { prettyDate } from '../utils/date';
+import { prettyDate, dayMonth } from '../utils/date';
 import { memberActive, memberLabel } from '../utils/member';
 
 export default function CustomerBox({ phone, setPhone, cust, setCust, isNew, setIsNew, onFind, onWalkin }) {
+  const toast = useToast();
+  const [saving, setSaving] = useState(false);
+
+  // Saved straight away (not only at billing) so the child's birthday is
+  // on record for the birthday list even if this visit is never billed.
+  const saveDetails = async () => {
+    setSaving(true);
+    try {
+      const { data } = await api.patch('/customers/' + cust.phone, { name: cust.name, kid: cust.kid, kidDob: cust.kidDob || '' });
+      setCust({ ...cust, ...data.customer });
+      setIsNew(false);
+      toast('Customer details save ho gaye');
+    } catch (e) {
+      toast((e.response && e.response.data && e.response.data.message) || 'Save nahi hua');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <>
       <div className="row">
@@ -31,6 +53,12 @@ export default function CustomerBox({ phone, setPhone, cust, setCust, isNew, set
             <label className="f"><span>Child name (optional)</span>
               <input type="text" value={cust.kid} placeholder="Bachche ka naam" onChange={e => setCust({ ...cust, kid: e.target.value })} />
             </label>
+            <label className="f"><span>Child ka birthday (optional)</span>
+              <input type="date" value={cust.kidDob || ''} onChange={e => setCust({ ...cust, kidDob: e.target.value })} />
+            </label>
+            <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 11 }}>
+              <button className="btn" style={{ width: '100%' }} disabled={saving} onClick={saveDetails}>{saving ? 'Saving…' : 'Details save karein'}</button>
+            </div>
           </div>
         </>
       )}
@@ -41,6 +69,9 @@ export default function CustomerBox({ phone, setPhone, cust, setCust, isNew, set
           <div style={{ flex: 1, minWidth: 0 }}>
             <b>{cust.name || 'Unnamed'}</b>{cust.kid ? <span className="hint"> · {cust.kid}</span> : null}
             <div className="hint">{cust.visits || 0} visits · {INR(cust.totalSpend || 0)} lifetime{cust.lastVisit ? ' · last ' + prettyDate(cust.lastVisit) : ''}</div>
+            {(cust.points > 0 || cust.kidDob) && (
+              <div className="hint">{cust.points > 0 ? cust.points + ' loyalty points' : ''}{cust.points > 0 && cust.kidDob ? ' · ' : ''}{cust.kidDob ? 'Birthday ' + dayMonth(cust.kidDob) : ''}</div>
+            )}
             {cust.membership && (
               <div style={{ marginTop: 5 }}><span className={'badge' + (memberActive(cust) ? '' : ' warn')}>{memberLabel(cust)}</span></div>
             )}

@@ -6,6 +6,8 @@ import { rollup } from '../utils/report';
 import { exportCSV } from '../utils/csv';
 import ReportBreakdown from '../components/ReportBreakdown';
 import TableBreakdown from '../components/TableBreakdown';
+import WaiterBreakdown from '../components/WaiterBreakdown';
+import ProfitCard from '../components/ProfitCard';
 
 function PendingBookings({ api }) {
   const [bookings, setBookings] = useState([]);
@@ -58,14 +60,16 @@ function heroSub(t, extra) {
   );
 }
 
-function DayReport({ date, bills, t }) {
+function DayReport({ date, bills, t, expenses }) {
   return (
     <>
       <div className="hero"><small>{prettyDate(date)}</small><b>{INR(t.total)}</b>
         {heroSub(t, <span>Avg {INR(t.bills ? t.total / t.bills : 0)}</span>)}
       </div>
       <ReportBreakdown t={t} />
+      <ProfitCard t={t} expenses={expenses} />
       <TableBreakdown bills={bills} />
+      <WaiterBreakdown bills={bills} />
       <div className="card">
         <div className="hd"><h2>Bills</h2><div className="spacer"></div>
           <button className="btn sm" onClick={() => exportCSV(bills, date)}>Export CSV</button></div>
@@ -96,7 +100,7 @@ function DayReport({ date, bills, t }) {
 
 // Generic "day by day" report for any date range — powers Week, Month,
 // Last 3 Months, Year and Custom range modes alike.
-function RangeReport({ label, bills, t, filename }) {
+function RangeReport({ label, bills, t, filename, expenses }) {
   const byDay = {};
   bills.forEach(b => { if (!b.void) byDay[b.date] = (byDay[b.date] || 0) + b.total; });
   const keys = Object.keys(byDay).sort();
@@ -107,7 +111,9 @@ function RangeReport({ label, bills, t, filename }) {
         {heroSub(t, <><span>{keys.length} days open</span><span>Avg/day {INR(keys.length ? t.total / keys.length : 0)}</span></>)}
       </div>
       <ReportBreakdown t={t} />
+      <ProfitCard t={t} expenses={expenses} />
       <TableBreakdown bills={bills} />
+      <WaiterBreakdown bills={bills} />
       <div className="card">
         <div className="hd"><h2>Day by day</h2><div className="spacer"></div>
           <button className="btn sm" onClick={() => exportCSV(bills, filename)}>Export CSV</button></div>
@@ -144,6 +150,7 @@ export default function OwnerReportsPage() {
   const [rangeTo, setRangeTo] = useState(dstr());
   const [bills, setBills] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [expenses, setExpenses] = useState(null);
 
   const wk = weekRange(weekAnchor);
   const quarterTo = dstr();
@@ -159,8 +166,13 @@ export default function OwnerReportsPage() {
       else if (mode === 'quarter') params = { from: quarterFrom, to: quarterTo };
       else if (mode === 'year') params = { from: year + '-01-01', to: year + '-12-31' };
       else params = { from: rangeFrom, to: rangeTo };
-      const { data } = await api.get('/bills', { params });
-      setBills(data.bills);
+      const range = params.date ? { from: params.date, to: params.date } : params.month ? { from: params.month + '-01', to: params.month + '-31' } : params;
+      const [billsRes, expRes] = await Promise.all([
+        api.get('/bills', { params }),
+        api.get('/cash/expenses', { params: range }).catch(() => null)
+      ]);
+      setBills(billsRes.data.bills);
+      setExpenses(expRes ? expRes.data.expenses : null);
     } finally {
       setLoading(false);
     }
@@ -172,18 +184,18 @@ export default function OwnerReportsPage() {
 
   let report;
   if (mode === 'day') {
-    report = <DayReport date={date} bills={bills} t={t} />;
+    report = <DayReport date={date} bills={bills} t={t} expenses={expenses} />;
   } else if (mode === 'month') {
     const label = new Date(month + '-01T00:00').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
-    report = <RangeReport label={label} bills={bills} t={t} filename={month} />;
+    report = <RangeReport label={label} bills={bills} t={t} expenses={expenses} filename={month} />;
   } else if (mode === 'week') {
-    report = <RangeReport label={`${prettyDate(wk.from).replace(/, \d{4}/, '')} – ${prettyDate(wk.to)}`} bills={bills} t={t} filename={wk.from + '_to_' + wk.to} />;
+    report = <RangeReport label={`${prettyDate(wk.from).replace(/, \d{4}/, '')} – ${prettyDate(wk.to)}`} bills={bills} t={t} expenses={expenses} filename={wk.from + '_to_' + wk.to} />;
   } else if (mode === 'quarter') {
-    report = <RangeReport label={`Last 3 mahine (${prettyDate(quarterFrom).replace(/, \d{4}/, '')} – ${prettyDate(quarterTo)})`} bills={bills} t={t} filename={quarterFrom + '_to_' + quarterTo} />;
+    report = <RangeReport label={`Last 3 mahine (${prettyDate(quarterFrom).replace(/, \d{4}/, '')} – ${prettyDate(quarterTo)})`} bills={bills} t={t} expenses={expenses} filename={quarterFrom + '_to_' + quarterTo} />;
   } else if (mode === 'year') {
-    report = <RangeReport label={String(year)} bills={bills} t={t} filename={String(year)} />;
+    report = <RangeReport label={String(year)} bills={bills} t={t} expenses={expenses} filename={String(year)} />;
   } else {
-    report = <RangeReport label={`${prettyDate(rangeFrom).replace(/, \d{4}/, '')} – ${prettyDate(rangeTo)}`} bills={bills} t={t} filename={rangeFrom + '_to_' + rangeTo} />;
+    report = <RangeReport label={`${prettyDate(rangeFrom).replace(/, \d{4}/, '')} – ${prettyDate(rangeTo)}`} bills={bills} t={t} expenses={expenses} filename={rangeFrom + '_to_' + rangeTo} />;
   }
 
   return (

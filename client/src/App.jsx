@@ -10,8 +10,11 @@ import DayEndPage from './pages/DayEndPage';
 import MembersPage from './pages/MembersPage';
 import CustomersPage from './pages/CustomersPage';
 import SetupPage from './pages/SetupPage';
+import KitchenPage from './pages/KitchenPage';
+import CashPage from './pages/CashPage';
+import AuditPage from './pages/AuditPage';
 
-const STAFF_VIEWS = ['tables', 'bill'];
+const STAFF_VIEWS = ['tables', 'bill', 'cash'];
 
 export default function App() {
   const { user, ready, isAdmin } = useAuth();
@@ -31,6 +34,16 @@ export default function App() {
   if (!ready) return null;
   if (!user) return <LoginPage />;
 
+  if (user.role === 'kitchen') {
+    return (
+      <>
+        <TopBar />
+        <main className="wrap" style={{ paddingTop: 16 }}><KitchenPage /></main>
+        <PrintArea />
+      </>
+    );
+  }
+
   const goView = (v) => {
     if (!STAFF_VIEWS.includes(v) && !isAdmin) return;
     setView(v);
@@ -47,7 +60,9 @@ export default function App() {
       <main className="wrap">
         {view === 'tables' && <TablesPage />}
         {view === 'bill' && <BillPage billIntent={billIntent} onConsumeIntent={() => setBillIntent(null)} />}
+        {view === 'cash' && <CashPage />}
         {view === 'day' && isAdmin && <DayEndPage />}
+        {view === 'log' && isAdmin && <AuditPage />}
         {view === 'mem' && isAdmin && <MembersPage onStartMembership={startMembership} onViewCustomer={viewCustomer} />}
         {view === 'cust' && isAdmin && <CustomersPage initialQuery={custQuery} onBillThis={billThisCustomer} onMemThis={startMembership} />}
         {view === 'setup' && isAdmin && <SetupPage />}

@@ -6,7 +6,8 @@ const sessionSchema = new mongoose.Schema({
   kids: { type: Number, default: 1 },
   phone: { type: String, default: '' },
   name: { type: String, default: 'Walk-in' },
-  member: { type: Boolean, default: false }
+  member: { type: Boolean, default: false },
+  plannedMins: { type: Number, default: 0 }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Session', sessionSchema);

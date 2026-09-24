@@ -7,8 +7,10 @@ import { exportCSV } from '../utils/csv';
 import ReportBreakdown from '../components/ReportBreakdown';
 import TableBreakdown from '../components/TableBreakdown';
 import EditBillSheet from '../components/EditBillSheet';
+import WaiterBreakdown from '../components/WaiterBreakdown';
+import ProfitCard from '../components/ProfitCard';
 
-function DayReport({ date, bills, t, onVoid, onSettle, onEdit }) {
+function DayReport({ date, bills, t, expenses, onVoid, onSettle, onEdit }) {
   return (
     <>
       <div className="hero"><small>{prettyDate(date)}</small><b>{INR(t.total)}</b>
@@ -16,7 +18,9 @@ function DayReport({ date, bills, t, onVoid, onSettle, onEdit }) {
           <span>Avg {INR(t.bills ? t.total / t.bills : 0)}</span>{t.disc > 0 && <span>Disc {INR(t.disc)}</span>}</div>
       </div>
       <ReportBreakdown t={t} />
+      <ProfitCard t={t} expenses={expenses} />
       <TableBreakdown bills={bills} />
+      <WaiterBreakdown bills={bills} />
       <div className="card">
         <div className="hd"><h2>Bills</h2><div className="spacer"></div>
           <button className="btn sm" onClick={() => exportCSV(bills, date)}>Export CSV</button></div>
@@ -53,7 +57,7 @@ function DayReport({ date, bills, t, onVoid, onSettle, onEdit }) {
   );
 }
 
-function MonthReport({ month, bills, t }) {
+function MonthReport({ month, bills, t, expenses }) {
   const byDay = {};
   bills.forEach(b => { if (!b.void) byDay[b.date] = (byDay[b.date] || 0) + b.total; });
   const keys = Object.keys(byDay).sort();
@@ -66,7 +70,9 @@ function MonthReport({ month, bills, t }) {
           <span>Avg/day {INR(keys.length ? t.total / keys.length : 0)}</span></div>
       </div>
       <ReportBreakdown t={t} />
+      <ProfitCard t={t} expenses={expenses} />
       <TableBreakdown bills={bills} />
+      <WaiterBreakdown bills={bills} />
       <div className="card">
         <div className="hd"><h2>Day by day</h2><div className="spacer"></div>
           <button className="btn sm" onClick={() => exportCSV(bills, month)}>Export CSV</button></div>
@@ -90,12 +96,18 @@ export default function DayEndPage() {
   const [bills, setBills] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null);
+  const [expenses, setExpenses] = useState(null);
 
   const load = async () => {
     setLoading(true);
     try {
-      const { data } = await api.get('/bills', { params: mode === 'day' ? { date } : { month } });
-      setBills(data.bills);
+      const range = mode === 'day' ? { from: date, to: date } : { from: month + '-01', to: month + '-31' };
+      const [billsRes, expRes] = await Promise.all([
+        api.get('/bills', { params: mode === 'day' ? { date } : { month } }),
+        api.get('/cash/expenses', { params: range }).catch(() => null)
+      ]);
+      setBills(billsRes.data.bills);
+      setExpenses(expRes ? expRes.data.expenses : null);
     } finally {
       setLoading(false);
     }
@@ -135,8 +147,8 @@ export default function DayEndPage() {
       </div></div>
 
       {loading ? <p className="hint">Loading…</p> : mode === 'day'
-        ? <DayReport date={date} bills={bills} t={t} onVoid={voidBill} onSettle={settleDue} onEdit={setEditing} />
-        : <MonthReport month={month} bills={bills} t={t} />}
+        ? <DayReport date={date} bills={bills} t={t} expenses={expenses} onVoid={voidBill} onSettle={settleDue} onEdit={setEditing} />
+        : <MonthReport month={month} bills={bills} t={t} expenses={expenses} />}
 
       <EditBillSheet open={!!editing} bill={editing} onClose={() => setEditing(null)}
         onSaved={() => { setEditing(null); load(); }} />

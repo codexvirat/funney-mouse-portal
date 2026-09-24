@@ -18,13 +18,13 @@ function itemLine(i) {
   return i.cat === 'play' ? (i.meta.minutes + 'min × ' + i.meta.kids) : (i.qty + ' × ' + INR(i.rate));
 }
 
-function receiptHTML(b, shopName) {
+function receiptHTML(b, shopName, customer) {
   const pays = Object.entries(b.pay).filter(([, v]) => v > 0).map(([k, v]) => k + ' ' + INR(v)).join(' · ') || '—';
   const sectionsHtml = sectionRows(b.items).map(s => `
     <tr><td colspan="2" style="font-size:10px;font-weight:bold;padding-top:6px">${s.label.toUpperCase()}</td></tr>
     ${s.items.map(i => `<tr><td>${i.name}<br><span style="font-size:10px">${itemLine(i)}</span></td><td class="rt">${INR(i.amount)}</td></tr>`).join('')}
   `).join('');
-  const otherDisc = b.discount - (b.memberDiscount || 0) - (b.happyHourDiscount || 0);
+  const otherDisc = b.discount - (b.memberDiscount || 0) - (b.happyHourDiscount || 0) - (b.pointsDiscount || 0);
   return `<h3>${shopName}</h3>
     <div style="text-align:center;font-size:11px">Bill #${b.no} · ${prettyDate(b.date)} ${tstr(b.ts)}</div>
     <div style="text-align:center;font-size:11px">${b.name || 'Walk-in'}${b.phone ? ' · ' + b.phone : ''}${b.tableName ? ' · ' + b.tableName : ''}</div><hr>
@@ -32,11 +32,13 @@ function receiptHTML(b, shopName) {
     <table><tr><td>Subtotal</td><td class="rt">${INR(b.subtotal)}</td></tr>
     ${b.memberDiscount ? `<tr><td>Member discount</td><td class="rt">− ${INR(b.memberDiscount)}</td></tr>` : ''}
     ${b.happyHourDiscount ? `<tr><td>Happy hour</td><td class="rt">− ${INR(b.happyHourDiscount)}</td></tr>` : ''}
+    ${b.pointsDiscount ? `<tr><td>Loyalty points (${b.pointsRedeemed})</td><td class="rt">− ${INR(b.pointsDiscount)}</td></tr>` : ''}
     ${otherDisc > 0 ? `<tr><td>Discount</td><td class="rt">− ${INR(otherDisc)}</td></tr>` : ''}
     ${b.cgst ? `<tr><td>CGST</td><td class="rt">${INR(b.cgst)}</td></tr>` : ''}
     ${b.sgst ? `<tr><td>SGST</td><td class="rt">${INR(b.sgst)}</td></tr>` : ''}
     <tr><td><b>Total</b></td><td class="rt"><b>${INR(b.total)}</b></td></tr>
     <tr><td colspan="2" style="font-size:11px">${pays}</td></tr></table><hr>
+    ${b.pointsEarned ? `<div style="text-align:center;font-size:11px">Is bill se ${b.pointsEarned} loyalty points mile${customer && customer.points != null ? ` · total ${customer.points}` : ''}</div>` : ''}
     <div style="text-align:center;font-size:11px">Thank you! Phir aaiyega 🧀</div>`;
 }
 
@@ -60,7 +62,7 @@ export default function ReceiptSheet({ open, bill, customer, config, onClose, do
 
   const print = () => {
     const area = document.getElementById('printarea');
-    if (area && bill) area.innerHTML = receiptHTML(bill, shopName);
+    if (area && bill) area.innerHTML = receiptHTML(bill, shopName, customer);
     window.print();
   };
 
@@ -101,6 +103,14 @@ export default function ReceiptSheet({ open, bill, customer, config, onClose, do
         )}
         {(bill.cgst > 0 || bill.sgst > 0) && (
           <p className="hint" style={{ margin: '4px 0 0' }}>GST: CGST {INR(bill.cgst)} + SGST {INR(bill.sgst)}</p>
+        )}
+        {(bill.pointsEarned > 0 || bill.pointsDiscount > 0) && (
+          <p className="hint" style={{ margin: '4px 0 0' }}>
+            {bill.pointsDiscount > 0 ? `${bill.pointsRedeemed} points use hue (− ${INR(bill.pointsDiscount)})` : ''}
+            {bill.pointsDiscount > 0 && bill.pointsEarned > 0 ? ' · ' : ''}
+            {bill.pointsEarned > 0 ? `${bill.pointsEarned} points mile` : ''}
+            {customer && customer.points != null ? ` · balance ${customer.points}` : ''}
+          </p>
         )}
         {bill.advance > 0 && (
           <p className="hint" style={{ margin: '4px 0 0' }}>Advance collected earlier: {INR(bill.advance)} ({bill.advanceMode})</p>

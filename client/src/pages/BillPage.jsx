@@ -36,6 +36,7 @@ export default function BillPage({ billIntent, onConsumeIntent }) {
   const [items, setItems] = useState([]);
   const [discount, setDiscount] = useState(0);
   const [discountType, setDiscountType] = useState('amt');
+  const [redeemPoints, setRedeemPoints] = useState(0);
 
   const [cat, setCat] = useState('play');
   const [useMember, setUseMember] = useState(false);
@@ -84,7 +85,9 @@ export default function BillPage({ billIntent, onConsumeIntent }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [billIntent]);
 
-  const walkin = () => { setCust(null); setIsNew(false); setPhone(''); };
+  const walkin = () => { setCust(null); setIsNew(false); setPhone(''); setRedeemPoints(0); };
+
+  useEffect(() => { setRedeemPoints(0); }, [cust && cust.phone]);
 
   const addItem = (item) => setItems(prev => [...prev, { id: uid(), ...item }]);
   const removeItem = (id) => setItems(prev => prev.filter(i => i.id !== id));
@@ -97,12 +100,12 @@ export default function BillPage({ billIntent, onConsumeIntent }) {
 
   const sub = billSubtotal(items);
   const disc = billDiscount(items, discount, discountType);
-  const autoDiscount = useAutoDiscount((cust && cust.phone) || phone, items);
+  const autoDiscount = useAutoDiscount((cust && cust.phone) || phone, items, { discount, discountType, redeemPoints });
   const total = billTotalWithAuto(items, discount, discountType, autoDiscount);
   const kids = kidsOnBill(items);
 
   const resetAfterSave = () => {
-    setItems([]); setDiscount(0); setUseMember(false); setPlayKids(1); setPlayCustom(0);
+    setItems([]); setDiscount(0); setRedeemPoints(0); setUseMember(false); setPlayKids(1); setPlayCustom(0);
     setCust(null); setIsNew(false); setPhone('');
   };
 
@@ -111,7 +114,7 @@ export default function BillPage({ billIntent, onConsumeIntent }) {
       phone: (cust && cust.phone) || '',
       name: (cust && cust.name) || 'Walk-in',
       items: items.map(({ id, ...rest }) => rest),
-      discount, discountType, pay
+      discount, discountType, pay, redeemPoints
     });
     setLastBill(data.bill); setLastCust(data.customer);
     resetAfterSave();
@@ -163,7 +166,9 @@ export default function BillPage({ billIntent, onConsumeIntent }) {
             discount={discount} setDiscount={setDiscount}
             discountType={discountType} setDiscountType={setDiscountType}
             canDiscount={isAdmin || config.staffDiscount !== false}
-            sub={sub} disc={disc} total={total} autoDiscount={autoDiscount} />
+            sub={sub} disc={disc} total={total} autoDiscount={autoDiscount}
+            points={config.loyalty && config.loyalty.enabled && cust && !isNew ? cust.points || 0 : 0} pointValue={config.loyalty && config.loyalty.pointValue}
+            redeemPoints={redeemPoints} setRedeemPoints={setRedeemPoints} />
         </div>
       </div>
 

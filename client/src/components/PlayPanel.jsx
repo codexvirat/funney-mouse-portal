@@ -31,7 +31,7 @@ export default function PlayPanel({
     try {
       await api.post('/sessions', {
         kids: playKids, phone: (cust && cust.phone) || '', name: (cust && cust.name) || 'Walk-in',
-        member: !!(useMember && canMember)
+        member: !!(useMember && canMember), plannedMins: mins
       });
       toast('Timer started');
     } catch (e) {

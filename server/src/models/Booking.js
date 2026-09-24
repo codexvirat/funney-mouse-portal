@@ -8,12 +8,15 @@ const bookingSchema = new mongoose.Schema({
   name: { type: String, default: 'Walk-in' },
   eventDate: { type: String, required: true },
   guests: { type: Number, default: 0 },
+  tablesCount: { type: Number, default: 1 },
   advance: { type: Number, default: 0 },
   advanceMode: { type: String, default: 'CASH' },
+  estimate: { type: Number, default: 0 },
   note: { type: String, default: '' },
   status: { type: String, enum: ['pending', 'used', 'cancelled'], default: 'pending' },
   createdBy: { type: String, default: '' },
-  usedTableId: { type: String, default: '' }
+  usedTableId: { type: String, default: '' },
+  usedTableIds: { type: [String], default: [] }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Booking', bookingSchema);

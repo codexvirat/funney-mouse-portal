@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const asyncHandler = require('../utils/asyncHandler');
 const User = require('../models/User');
+const { audit } = require('../utils/audit');
 
 function signToken(user) {
   return jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
@@ -13,7 +14,7 @@ function publicUser(u) {
 }
 
 function normalizeRole(role) {
-  return ['admin', 'owner'].includes(role) ? role : 'staff';
+  return ['admin', 'owner', 'kitchen'].includes(role) ? role : 'staff';
 }
 
 exports.login = asyncHandler(async (req, res) => {
@@ -76,6 +77,7 @@ exports.createUser = asyncHandler(async (req, res) => {
     name: name || '',
     role: normalizeRole(role)
   });
+  await audit(req.user, 'User added', `${user.username} (${user.role})`);
   res.status(201).json({ user: publicUser(user) });
 });
 
@@ -91,6 +93,8 @@ exports.updateUser = asyncHandler(async (req, res) => {
   if (active !== undefined) user.active = !!active;
   if (password) user.passwordHash = await User.hashPassword(password);
   await user.save();
+  const what = [role !== undefined && 'role ' + user.role, active !== undefined && (user.active ? 'enabled' : 'disabled'), password && 'password reset', name !== undefined && 'name'].filter(Boolean).join(', ');
+  await audit(req.user, 'User changed', `${user.username}: ${what}`);
   res.json({ user: publicUser(user) });
 });
 
@@ -104,5 +108,6 @@ exports.deleteUser = asyncHandler(async (req, res) => {
     res.status(404);
     throw new Error('User not found');
   }
+  await audit(req.user, 'User deleted', user.username);
   res.json({ ok: true });
 });

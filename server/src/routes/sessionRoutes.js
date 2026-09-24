@@ -1,9 +1,14 @@
 const router = require('express').Router();
-const { protect } = require('../middleware/auth');
+const { protect, allowRoles } = require('../middleware/auth');
 const ctrl = require('../controllers/sessionController');
+const { notifyOnWrite } = require('../utils/events');
 
-router.get('/', protect, ctrl.listSessions);
-router.post('/', protect, ctrl.startSession);
-router.delete('/:id', protect, ctrl.endSession);
+const floor = allowRoles('admin', 'staff');
+
+router.use(notifyOnWrite('sessions'));
+
+router.get('/', protect, floor, ctrl.listSessions);
+router.post('/', protect, floor, ctrl.startSession);
+router.delete('/:id', protect, floor, ctrl.endSession);
 
 module.exports = router;

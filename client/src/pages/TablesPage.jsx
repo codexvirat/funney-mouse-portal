@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../api/client';
 import { useConfig } from '../context/ConfigContext';
 import { useToast } from '../context/ToastContext';
@@ -7,6 +7,18 @@ import { INR } from '../utils/money';
 import Sheet from '../components/Sheet';
 import BookingsCard from '../components/BookingsCard';
 import TableDetailPage from './TableDetailPage';
+import { useLiveEvents } from '../hooks/useLiveEvents';
+import { beep, playAlert } from '../utils/notify';
+
+// Things on a table that need staff attention right now.
+function tableAlerts(order) {
+  const out = [];
+  const play = order.playStart ? playAlert(order.playStart, order.playPlannedMins) : null;
+  if (play && play.state !== 'ok') out.push({ key: 'play:' + play.state, text: '⏰ ' + play.text });
+  (order.kots || []).filter(k => k.readyAt && !k.servedAt).forEach(k => out.push({ key: 'ready:' + k.no, text: '🍽 Food ready (KOT #' + k.no + ')' }));
+  (order.requests || []).filter(r => r.status === 'new').forEach(r => out.push({ key: 'qr:' + r.id, text: '📱 Naya QR order' }));
+  return out;
+}
 
 const PAY_MODES = ['CASH', 'UPI', 'CARD'];
 
@@ -122,6 +134,7 @@ export default function TablesPage() {
   const [pickTable, setPickTable] = useState(null);
   const [activeBooking, setActiveBooking] = useState(null);
   const [, setTick] = useState(0);
+  const seenAlerts = useRef(null);
 
   const load = useCallback(async () => {
     try {
@@ -130,12 +143,28 @@ export default function TablesPage() {
     } catch (e) { /* ignore transient poll errors */ }
   }, []);
 
+  useLiveEvents(['tables'], load);
+
   useEffect(() => {
     load();
-    const poll = setInterval(load, 8000);
-    const clock = setInterval(() => setTick(t => t + 1), 30000);
+    const poll = setInterval(load, 20000);
+    const clock = setInterval(() => setTick(t => t + 1), 20000);
     return () => { clearInterval(poll); clearInterval(clock); };
   }, [load]);
+
+  // Beep + toast once for each new alert (not for ones already showing when
+  // the page opened).
+  useEffect(() => {
+    const now = new Set();
+    const fresh = [];
+    orders.forEach(o => tableAlerts(o).forEach(a => {
+      const k = o._id + ':' + a.key;
+      now.add(k);
+      if (seenAlerts.current && !seenAlerts.current.has(k)) fresh.push(o.tableName + ' — ' + a.text);
+    }));
+    if (fresh.length) { beep(); toast(fresh[0]); }
+    seenAlerts.current = now;
+  });
 
   if (!config) return <p className="hint">Loading…</p>;
 
@@ -162,7 +191,9 @@ export default function TablesPage() {
 
   return (
     <>
-      <BookingsCard onUseBooking={(b) => { setActiveBooking(b); toast('Ab kisi free table par tap karein — ' + b.name + ' ke liye'); }} />
+      <BookingsCard tables={tables} freeTables={freeTables}
+        onUseBooking={(b) => { setActiveBooking(b); toast('Ab kisi free table par tap karein — ' + b.name + ' ke liye'); }}
+        onAssigned={(created) => setOrders(prev => [...prev, ...created])} />
 
       {activeBooking && (
         <div className="card" style={{ borderColor: 'var(--accent)' }}>
@@ -184,8 +215,9 @@ export default function TablesPage() {
               const order = orders.find(o => o.tableId === t.id);
               const mins = order ? Math.max(0, Math.round((Date.now() - new Date(order.openedAt).getTime()) / 60000)) : 0;
               const state = !order ? 'free' : (order.reserved ? 'reserved' : 'busy');
+              const alerts = order ? tableAlerts(order) : [];
               return (
-                <button key={t.id} className={'mi tbltile ' + state}
+                <button key={t.id} className={'mi tbltile ' + state + (alerts.length ? ' alert' : '')}
                   onClick={() => order ? setOpenId(order._id) : setPickTable(t)}>
                   <strong>{t.name}</strong>
                   {!order && <em>Free{t.capacity ? ' · seats ' + t.capacity : ''}</em>}
@@ -199,6 +231,7 @@ export default function TablesPage() {
                       {Math.floor(mins / 60)}h {String(mins % 60).padStart(2, '0')}m · {INR(billSubtotal(order.items))}
                     </em>
                   )}
+                  {alerts.map(a => <b key={a.key} className="tblalert">{a.text}</b>)}
                 </button>
               );
             })}

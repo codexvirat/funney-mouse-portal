@@ -23,8 +23,13 @@ services:
       JWT_SECRET: change-this-to-a-long-random-secret
       JWT_EXPIRES_IN: 12h
       PORT: 4000
+      BACKUP_DIR: /app/backups
+    volumes:
+      # Daily automatic backups (last 30 days) — keep these outside the container.
+      - backups:/app/backups
     ports:
       - "4000:4000"
 
 volumes:
   mongo_data:
+  backups:

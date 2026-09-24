@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import api from '../api/client';
 import { useAuth } from './AuthContext';
+import { useLiveEvents } from '../hooks/useLiveEvents';
 
 const ConfigContext = createContext(null);
 
@@ -20,6 +21,9 @@ export function ConfigProvider({ children }) {
     setLoading(true);
     reload().finally(() => setLoading(false));
   }, [user, reload]);
+
+  // Settings or an item's out-of-stock flag changed on another device.
+  useLiveEvents(['config'], () => { if (user) reload().catch(() => {}); });
 
   const save = useCallback(async (patch) => {
     const { data } = await api.put('/config', patch);

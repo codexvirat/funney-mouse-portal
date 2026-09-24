@@ -13,11 +13,11 @@ export function billTotal(items, discount, discountType) {
 }
 
 // Same as billTotal but also nets out server-previewed auto-discounts
-// (membership %, happy hour) and adds server-previewed GST (CGST + SGST,
-// food only) so the amount shown matches what checkout will actually charge
-// — see hooks/useAutoDiscount.
+// (membership %, happy hour, loyalty points) and adds server-previewed GST
+// (CGST + SGST, food only) so the amount shown matches what checkout will
+// actually charge — see hooks/useAutoDiscount.
 export function billTotalWithAuto(items, discount, discountType, autoDiscount) {
-  const auto = (autoDiscount && ((autoDiscount.memberDiscount || 0) + (autoDiscount.happyHourDiscount || 0))) || 0;
+  const auto = (autoDiscount && ((autoDiscount.memberDiscount || 0) + (autoDiscount.happyHourDiscount || 0) + (autoDiscount.pointsDiscount || 0))) || 0;
   const gst = (autoDiscount && ((autoDiscount.cgst || 0) + (autoDiscount.sgst || 0))) || 0;
   return Math.max(0, billTotal(items, discount, discountType) - auto) + gst;
 }

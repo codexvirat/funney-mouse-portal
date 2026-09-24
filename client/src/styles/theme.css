@@ -123,6 +123,9 @@ input::placeholder{color:color-mix(in srgb,var(--muted) 70%,transparent)}
 .mi.tbltile{padding:13px}
 .mi.tbltile em{display:block;margin-top:5px;font-style:normal;line-height:1.4}
 .mi.tbltile.free{border-color:var(--mint);background:var(--mint-soft)}
+.mi.tbltile.alert{border-color:var(--berry);box-shadow:0 0 0 2px var(--berry);animation:tblpulse 1.6s ease-in-out infinite}
+.tblalert{display:block;margin-top:5px;font-size:12px;font-weight:700;color:var(--berry)}
+@keyframes tblpulse{50%{box-shadow:0 0 0 4px color-mix(in srgb,var(--berry) 35%,transparent)}}
 .mi.tbltile.busy{border-color:var(--berry);background:var(--berry-soft)}
 .mi.tbltile.reserved{border-color:var(--accent);background:var(--accent-soft)}
 
@@ -194,6 +197,15 @@ table.tb tr.void td{opacity:.45;text-decoration:line-through}
   padding:11px 17px;border-radius:12px;font-size:14px;font-weight:500;opacity:0;pointer-events:none;transition:opacity .2s}
 .toast.on{opacity:1}
 #printarea{display:none}
+
+/* booking calendar */
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center}
+.cal>.hint{font-size:11px}
+.cald{position:relative;border:1px solid var(--line);background:var(--surface-2);border-radius:9px;padding:8px 0;font-size:13px}
+.cald.has{border-color:var(--accent);background:var(--accent-soft);font-weight:700}
+.cald.today{outline:2px solid var(--grape);outline-offset:-2px}
+.cald[aria-pressed="true"]{background:var(--text);color:var(--bg)}
+.cald i{position:absolute;top:-6px;right:-4px;font-style:normal;font-size:10px;background:var(--berry);color:#fff;border-radius:99px;min-width:16px;height:16px;line-height:16px}
 
 /* login */
 .loginWrap{min-height:100vh;display:grid;place-items:center;padding:20px}

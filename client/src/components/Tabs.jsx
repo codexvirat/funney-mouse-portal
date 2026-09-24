@@ -3,9 +3,11 @@ import { useAuth } from '../context/AuthContext';
 const TABS = [
   { key: 'tables', label: 'Tables', admin: false },
   { key: 'bill', label: 'Quick bill', admin: false },
+  { key: 'cash', label: 'Cash / Kharcha', admin: false },
   { key: 'day', label: 'Day end', admin: true },
   { key: 'mem', label: 'Members', admin: true },
   { key: 'cust', label: 'Customers', admin: true },
+  { key: 'log', label: 'Activity log', admin: true },
   { key: 'setup', label: 'Setup', admin: true }
 ];
 

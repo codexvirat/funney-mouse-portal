@@ -19,7 +19,7 @@ export default function TopBar() {
         </div>
         <div className="brand"><b>{(config && config.shopName) || 'Funny Mouse'}</b><span>{prettyDate(dstr())}</span></div>
         <div className="spacer"></div>
-        <span className="pill">{user.name || user.username} · {isAdmin ? 'Admin' : 'Staff'}</span>
+        <span className="pill">{user.name || user.username} · {isAdmin ? 'Admin' : (user.role === 'kitchen' ? 'Kitchen' : 'Staff')}</span>
         <button className="pill" style={{ cursor: 'pointer' }} onClick={logout}>Logout</button>
       </div>
     </header>

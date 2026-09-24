@@ -3,6 +3,68 @@ import api from '../api/client';
 import { useConfig } from '../context/ConfigContext';
 import { useToast } from '../context/ToastContext';
 import { uid } from '../utils/uid';
+import { esc } from '../utils/html';
+import QRCode from 'qrcode';
+
+function BackupCard() {
+  const toast = useToast();
+  const [info, setInfo] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api.get('/admin/backups').then(({ data }) => setInfo(data)).catch(() => setInfo({ backups: [], error: true }));
+  }, []);
+
+  const download = async () => {
+    setBusy(true);
+    try {
+      const res = await api.get('/admin/backup', { responseType: 'blob' });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'funny-mouse-backup-' + new Date().toISOString().slice(0, 10) + '.json.gz';
+      a.click();
+      URL.revokeObjectURL(url);
+      toast('Backup download ho gaya');
+    } catch (e) {
+      toast('Backup download nahi hua');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const last = info && info.backups && info.backups[0];
+  return (
+    <div className="card"><div className="hd"><h2>Data backup</h2></div><div className="bd">
+      <p className="hint" style={{ margin: '0 0 10px' }}>
+        Server roz apne aap poore data (bills, customers, members, settings) ka backup banata hai aur pichle 30 din ke rakhta hai.
+        {last ? ` Last automatic backup: ${last.file.slice(7, 17)} (${Math.round(last.size / 1024)} KB).` : info && !info.error ? ' Abhi tak koi automatic backup nahi bana.' : ''}
+      </p>
+      <p className="hint" style={{ margin: '0 0 12px' }}>Server kharab ho jaye to bhi data bache, isliye hafte me ek baar backup download karke Google Drive / pen drive me rakh lijiye.</p>
+      <button className="btn dark" disabled={busy} onClick={download}>{busy ? 'Ban raha hai…' : 'Abhi backup download karein'}</button>
+    </div></div>
+  );
+}
+
+// One QR sticker per table (thermal printer width), linking to that table's
+// order page. Tables only get their secret token once settings are saved.
+async function printTableQRs(tables, shopName) {
+  const ready = tables.filter(t => t.qrToken);
+  const slips = await Promise.all(ready.map(async t => {
+    const url = `${window.location.origin}/order/${encodeURIComponent(t.id)}?t=${t.qrToken}`;
+    const img = await QRCode.toDataURL(url, { width: 480, margin: 1 });
+    return `<div style="text-align:center;padding:6mm 0">
+      <h3>${esc(shopName)}</h3>
+      <div style="font-size:20px;font-weight:bold;margin:2mm 0">${esc(t.name)}</div>
+      <img src="${img}" style="width:60mm;height:60mm" />
+      <div style="font-size:12px;margin-top:2mm">Scan karke menu dekhiye aur order kijiye 🍔</div>
+    </div>`;
+  }));
+  const area = document.getElementById('printarea');
+  if (area) area.innerHTML = slips.join('<div style="page-break-after:always"></div>');
+  // Give the QR images a moment to decode before the print dialog snapshots the page.
+  setTimeout(() => window.print(), 300);
+}
 
 function UsersCard() {
   const toast = useToast();
@@ -57,12 +119,13 @@ function UsersCard() {
           <input type="text" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></label>
         <label className="f" style={{ margin: 0, flex: '0 0 150px' }}><span>Role</span>
           <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}>
-            <option value="staff">Staff</option><option value="admin">Admin</option><option value="owner">Owner (reports PIN)</option>
+            <option value="staff">Staff</option><option value="admin">Admin</option><option value="owner">Owner (reports PIN)</option><option value="kitchen">Kitchen (KOT)</option>
           </select></label>
         <button className="btn dark" type="submit" style={{ flex: '0 0 auto' }}>+ Add user</button>
       </form>
       <p className="hint" style={{ margin: '0 0 14px' }}>
         Role "Owner" sirf reports dekh sakta hai (Day end — void/settle nahi) aur alag se <b>{window.location.origin}/owner</b> par PIN se login karta hai, poora staff/admin login flow use nahi karna padta.
+        Role "Kitchen" normal login page se login karta hai aur sirf table-wise KOT screen dekhta hai — naye food orders aur unka print.
       </p>
       {loading ? <p className="hint">Loading…</p> : (
         <div className="scrollx">
@@ -104,7 +167,11 @@ export default function SetupPage() {
   const addSlab = () => setForm(prev => ({ ...prev, playSlabs: [...prev.playSlabs, { id: uid(), label: 'New', minutes: 30, price: 0 }] }));
   const delSlab = (i) => setForm(prev => ({ ...prev, playSlabs: prev.playSlabs.filter((_, ix) => ix !== i) }));
 
-  const updateMenu = (i, f, v) => setForm(prev => { const arr = [...prev.menu]; arr[i] = { ...arr[i], [f]: f === 'name' ? v : (Number(v) || 0) }; return { ...prev, menu: arr }; });
+  const updateMenu = (i, f, v) => setForm(prev => { const arr = [...prev.menu]; arr[i] = { ...arr[i], [f]: f === 'name' || f === 'category' ? v : (Number(v) || 0) }; return { ...prev, menu: arr }; });
+  const setMenuAvailable = (i, v) => setForm(prev => { const arr = [...prev.menu]; arr[i] = { ...arr[i], available: v }; return { ...prev, menu: arr }; });
+  const menuCats = [...new Set(form.menu.map(m => m.category).filter(Boolean))];
+  const loyalty = form.loyalty || { enabled: false, earnPer: 100, pointValue: 1 };
+  const setLoyalty = (f, v) => setForm(prev => ({ ...prev, loyalty: { ...loyalty, [f]: v } }));
   const addMenu = () => setForm(prev => ({ ...prev, menu: [...prev.menu, { id: uid(), name: 'New item', price: 0 }] }));
   const delMenu = (i) => setForm(prev => ({ ...prev, menu: prev.menu.filter((_, ix) => ix !== i) }));
 
@@ -206,14 +273,21 @@ export default function SetupPage() {
 
       <div className="card"><div className="hd"><h2>Food menu</h2><div className="spacer"></div><span className="hint">{form.menu.length} items</span></div>
         <div className="bd">
+          <datalist id="menucats">{menuCats.map(c => <option key={c} value={c} />)}</datalist>
           {form.menu.map((m, i) => (
-            <div className="row" key={m.id} style={{ marginBottom: 8 }}>
+            <div className="row" key={m.id} style={{ marginBottom: 8, alignItems: 'center' }}>
               <input type="text" value={m.name} style={{ flex: '3 1 170px' }} onChange={e => updateMenu(i, 'name', e.target.value)} />
-              <input type="number" value={m.price} style={{ flex: '1 1 90px' }} onChange={e => updateMenu(i, 'price', e.target.value)} />
+              <input type="text" value={m.category || ''} placeholder="Category" list="menucats" style={{ flex: '2 1 110px' }} onChange={e => updateMenu(i, 'category', e.target.value)} />
+              <input type="number" value={m.price} style={{ flex: '1 1 80px' }} onChange={e => updateMenu(i, 'price', e.target.value)} />
+              <label style={{ flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                <input type="checkbox" checked={m.available !== false} onChange={e => setMenuAvailable(i, e.target.checked)} style={{ width: 16, height: 16 }} />
+                Available
+              </label>
               <button className="btn sm danger" style={{ flex: '0 0 auto' }} onClick={() => delMenu(i)}>✕</button>
             </div>
           ))}
           <button className="btn sm" style={{ marginTop: 10 }} onClick={addMenu}>+ Add item</button>
+          <p className="hint" style={{ margin: '10px 0 0' }}>Category (e.g. Snacks, Drinks, Meals) se billing me items jaldi milte hain. Kitchen login bhi items ko "khatam" mark kar sakta hai.</p>
         </div>
       </div>
 
@@ -231,6 +305,37 @@ export default function SetupPage() {
         <button className="btn sm" style={{ marginTop: 10 }} onClick={addPlan}>+ Add plan</button>
         <p className="hint" style={{ margin: '10px 0 0' }}>Hours = 0 rakhein to unlimited plan ban jayega. Disc % = 0 rakhein toh Shop card wala default member discount lagega.</p>
       </div></div>
+
+      <div className="card"><div className="hd"><h2>Loyalty points</h2></div><div className="bd">
+        <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+          <input type="checkbox" checked={!!loyalty.enabled} onChange={e => setLoyalty('enabled', e.target.checked)} style={{ width: 18, height: 18 }} />
+          <span>Loyalty points on hai</span>
+        </label>
+        <div className="row">
+          <label className="f" style={{ margin: 0, flex: '1 1 150px' }}><span>Har kitne ₹ ke bill par 1 point</span>
+            <input type="number" min="1" value={loyalty.earnPer || 100} onChange={e => setLoyalty('earnPer', Number(e.target.value) || 100)} /></label>
+          <label className="f" style={{ margin: 0, flex: '1 1 150px' }}><span>1 point = kitne ₹</span>
+            <input type="number" min="0" step="0.5" value={loyalty.pointValue ?? 1} onChange={e => setLoyalty('pointValue', Number(e.target.value) || 0)} /></label>
+        </div>
+        <p className="hint" style={{ margin: '10px 0 0' }}>
+          Example: ₹{loyalty.earnPer || 100} par 1 point, 1 point = ₹{loyalty.pointValue ?? 1} → ₹1000 ke bill par {Math.floor(1000 / (loyalty.earnPer || 100))} points
+          (agli baar ₹{Math.floor(1000 / (loyalty.earnPer || 100)) * (loyalty.pointValue ?? 1)} off). Sirf phone number wale customers ko milte hain; bill par "points use karein" tick karke redeem hote hain.
+        </p>
+      </div></div>
+
+      <div className="card"><div className="hd"><h2>QR se table order</h2></div><div className="bd">
+        <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+          <input type="checkbox" checked={form.qrOrdering !== false} onChange={e => setField('qrOrdering', e.target.checked)} style={{ width: 18, height: 18 }} />
+          <span>Customer QR scan karke order bhej sakte hain</span>
+        </label>
+        <p className="hint" style={{ margin: '0 0 12px' }}>
+          Har table ka alag QR sticker print karke table par lagaiye. Customer ka order seedha kitchen nahi jaata — staff ki table screen par "📱 Naya QR order" aata hai, staff Accept kare tab bill me judta hai. Order sirf tab jaata hai jab table open ho.
+        </p>
+        <button className="btn dark" disabled={!tables.some(t => t.qrToken)} onClick={() => printTableQRs(tables, form.shopName || 'Funny Mouse')}>Sab tables ke QR print karein</button>
+        {tables.some(t => !t.qrToken) && <p className="hint" style={{ margin: '10px 0 0' }}>Naye tables ka QR banne ke liye pehle neeche "Save settings" dabaiye.</p>}
+      </div></div>
+
+      <BackupCard />
 
       <UsersCard />
 

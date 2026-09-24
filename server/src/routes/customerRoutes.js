@@ -1,7 +1,11 @@
 const router = require('express').Router();
-const { protect } = require('../middleware/auth');
+const { protect, allowRoles } = require('../middleware/auth');
 const ctrl = require('../controllers/customerController');
 
-router.get('/:phone', protect, ctrl.getByPhone);
+const floor = allowRoles('admin', 'staff');
+
+router.get('/birthdays', protect, floor, ctrl.upcomingBirthdays);
+router.get('/:phone', protect, floor, ctrl.getByPhone);
+router.patch('/:phone', protect, floor, ctrl.updateCustomer);
 
 module.exports = router;

@@ -1,5 +1,8 @@
 const asyncHandler = require('../utils/asyncHandler');
+const crypto = require('crypto');
 const Config = require('../models/Config');
+const { audit } = require('../utils/audit');
+const { broadcast } = require('../utils/events');
 
 const DEFAULT_CFG = {
   shopName: 'Funny Mouse',
@@ -36,11 +39,24 @@ const DEFAULT_CFG = {
   sgstPercent: 2.5
 };
 
+// Every table needs a secret token for its QR-order link.
+function fillQrTokens(cfg) {
+  let changed = false;
+  (cfg.tables || []).forEach(t => {
+    if (!t.qrToken) { t.qrToken = crypto.randomBytes(6).toString('hex'); changed = true; }
+  });
+  if (changed) cfg.markModified('tables');
+  return changed;
+}
+
 async function getOrCreateConfig() {
   let cfg = await Config.findOne();
   if (!cfg) cfg = await Config.create(DEFAULT_CFG);
+  if (fillQrTokens(cfg)) await cfg.save();
   return cfg;
 }
+
+exports.getOrCreateConfig = getOrCreateConfig;
 
 exports.getConfig = asyncHandler(async (req, res) => {
   const cfg = await getOrCreateConfig();
@@ -49,10 +65,33 @@ exports.getConfig = asyncHandler(async (req, res) => {
 
 exports.updateConfig = asyncHandler(async (req, res) => {
   const cfg = await getOrCreateConfig();
-  const fields = ['shopName', 'staffDiscount', 'playSlabs', 'extraHalfHour', 'sockPrice', 'adultFree', 'menu', 'plans', 'tables', 'memberDiscountPercent', 'memberDiscountMinSpend', 'happyHour', 'cgstPercent', 'sgstPercent'];
+  const fields = ['shopName', 'staffDiscount', 'playSlabs', 'extraHalfHour', 'sockPrice', 'adultFree', 'menu', 'plans', 'tables', 'memberDiscountPercent', 'memberDiscountMinSpend', 'happyHour', 'cgstPercent', 'sgstPercent', 'loyalty', 'qrOrdering'];
+  const changed = fields.filter(f => req.body[f] !== undefined && JSON.stringify(req.body[f]) !== JSON.stringify(cfg.toObject()[f]));
   fields.forEach(f => {
     if (req.body[f] !== undefined) cfg[f] = req.body[f];
   });
+  fillQrTokens(cfg);
   await cfg.save();
+  if (changed.length) await audit(req.user, 'Settings changed', changed.join(', '));
+  broadcast('config');
+  res.json({ config: cfg });
+});
+
+// Kitchen/staff mark a menu item out of stock (or back) without touching
+// the rest of the settings.
+exports.setMenuAvailability = asyncHandler(async (req, res) => {
+  const available = !!req.body.available;
+  const cfg = await Config.findOneAndUpdate(
+    { 'menu.id': req.params.id },
+    { $set: { 'menu.$.available': available } },
+    { new: true }
+  );
+  if (!cfg) {
+    res.status(404);
+    throw new Error('Menu item not found');
+  }
+  const item = cfg.menu.find(m => m.id === req.params.id);
+  await audit(req.user, available ? 'Item available' : 'Item out of stock', item ? item.name : req.params.id);
+  broadcast('config');
   res.json({ config: cfg });
 });

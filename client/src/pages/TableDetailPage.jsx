@@ -7,6 +7,10 @@ import { uid } from '../utils/uid';
 import { memberActive } from '../utils/member';
 import { useAutoDiscount } from '../hooks/useAutoDiscount';
 import { INR } from '../utils/money';
+import { pendingKot, printKotSlip } from '../utils/kot';
+import { playAlert } from '../utils/notify';
+import { tstr } from '../utils/date';
+import { slabSorted } from '../utils/bill';
 import CustomerBox from '../components/CustomerBox';
 import PlayPanel from '../components/PlayPanel';
 import FoodPanel from '../components/FoodPanel';
@@ -25,13 +29,6 @@ const CATS = [
   { key: 'member', label: 'Membership' }
 ];
 
-function kotHTML(order, items, shopName) {
-  const rows = items.map(i => `<tr><td>${i.name}</td><td class="rt">×${i.qty}</td></tr>`).join('');
-  return `<h3>${shopName} — KOT</h3>
-    <div style="text-align:center;font-size:11px">${order.tableName} · ${new Date().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}</div><hr>
-    <table>${rows}</table>`;
-}
-
 // A table's whole open visit (food + play together), server-persisted via
 // TableOrder so it survives refresh/another device — unlike BillPage's
 // quick-bill flow, which only ever keeps one draft in local React state.
@@ -46,6 +43,7 @@ export default function TableDetailPage({ order, config, freeTables, otherOrders
   const [items, setItems] = useState(() => order.items.map(i => ({ id: uid(), ...i })));
   const [discount, setDiscount] = useState(0);
   const [discountType, setDiscountType] = useState('amt');
+  const [redeemPoints, setRedeemPoints] = useState(0);
 
   const [cat, setCat] = useState('play');
   const [useMember, setUseMember] = useState(false);
@@ -151,17 +149,23 @@ export default function TableDetailPage({ order, config, freeTables, otherOrders
 
   const sub = billSubtotal(items);
   const disc = billDiscount(items, discount, discountType);
-  const autoDiscount = useAutoDiscount((cust && cust.phone) || phone, items);
+  const autoDiscount = useAutoDiscount((cust && cust.phone) || phone, items, { discount, discountType, redeemPoints });
+  const loyaltyOn = !!(config.loyalty && config.loyalty.enabled);
+  useEffect(() => { setRedeemPoints(0); }, [cust && cust.phone]);
   const total = billTotalWithAuto(items, discount, discountType, autoDiscount);
   const overCapacity = capacity && (adults + kidCount) > capacity;
+
+  const kotPending = pendingKot({ ...order, items }).reduce((a, i) => a + i.qty, 0);
 
   const playRunning = !!order.playStart;
   const playMins = playRunning ? Math.max(0, Math.round((Date.now() - new Date(order.playStart).getTime()) / 60000)) : 0;
 
   const startTimer = async () => {
     try {
+      const slab = slabSorted(config).find(s => s.id === playSlab) || slabSorted(config)[0];
       const { data } = await api.post(`/table-orders/${order._id}/play/start`, {
-        kids: playKids, member: !!(useMember && memberActive(cust))
+        kids: playKids, member: !!(useMember && memberActive(cust)),
+        plannedMins: playCustom || (slab && slab.minutes) || 0
       });
       onSyncOrder(data.order);
       toast('Timer started');
@@ -181,15 +185,58 @@ export default function TableDetailPage({ order, config, freeTables, otherOrders
     }
   };
 
-  const printKOT = () => {
-    const pending = items.filter(i => i.cat === 'food' && !(i.meta && i.meta.kotSent));
-    if (!pending.length) { toast('Kitchen ko bhejne ke liye naya food item nahi hai'); return; }
-    const area = document.getElementById('printarea');
-    if (area) area.innerHTML = kotHTML(order, pending, (config && config.shopName) || 'Funny Mouse');
-    window.print();
-    mutateItems(prev => prev.map(i => i.cat === 'food' ? { ...i, meta: { ...(i.meta || {}), kotSent: true } } : i));
-    toast('KOT print ho gaya');
+  // Items are PATCHed through saveChain, so wait for it before asking the
+  // server what's pending — otherwise a just-tapped item could miss the KOT.
+  const printKOT = async () => {
+    await saveChain.current.catch(() => {});
+    if (!pendingKot({ ...order, items }).length) { toast('Kitchen ko bhejne ke liye naya food item nahi hai'); return; }
+    try {
+      const { data } = await api.post(`/table-orders/${order._id}/kot`);
+      onSyncOrder(data.order);
+      printKotSlip(data.order, data.kot, (config && config.shopName) || 'Funny Mouse');
+      toast('KOT #' + data.kot.no + ' print ho gaya');
+    } catch (e) {
+      toast((e.response && e.response.data && e.response.data.message) || 'KOT print nahi hua');
+    }
   };
+
+  const addNote = (item) => {
+    const note = window.prompt('Kitchen ke liye note (e.g. less spicy, no onion):', (item.meta && item.meta.note) || '');
+    if (note === null) return;
+    const clean = note.trim().slice(0, 80);
+    mutateItems(prev => prev.map(i => i.id === item.id ? { ...i, meta: { ...(i.meta || {}), note: clean } } : i));
+  };
+
+  const markServed = async (kot) => {
+    try {
+      const { data } = await api.post(`/table-orders/${order._id}/kot/${kot.no}/served`);
+      onSyncOrder(data.order);
+    } catch (e) {
+      toast('Update nahi hua');
+    }
+  };
+
+  // Accepting a QR order adds its items on the server, so wait for pending
+  // saves first and then take the server's item list as the new truth.
+  const handleRequest = async (r, action) => {
+    await saveChain.current.catch(() => {});
+    try {
+      const { data } = await api.post(`/table-orders/${order._id}/requests/${r.id}`, { action });
+      onSyncOrder(data.order);
+      if (action === 'accept') {
+        setItems(data.order.items.map(i => ({ id: uid(), ...i })));
+        toast('Order bill me add ho gaya — ab KOT print karein');
+      } else {
+        toast('Order reject kar diya');
+      }
+    } catch (e) {
+      toast((e.response && e.response.data && e.response.data.message) || 'Update nahi hua');
+    }
+  };
+
+  const readyKots = (order.kots || []).filter(k => k.readyAt && !k.servedAt);
+  const newRequests = (order.requests || []).filter(r => r.status === 'new');
+  const playWarn = playRunning ? playAlert(order.playStart, order.playPlannedMins) : null;
 
   const startService = () => persist({ reserved: false });
 
@@ -223,7 +270,7 @@ export default function TableDetailPage({ order, config, freeTables, otherOrders
   const initialNote = order.advance > 0 ? `Advance ${INR(order.advance)} (${order.advanceMode}) pehle hi collect ho chuka hai.` : undefined;
 
   const onSaveBill = async (pay) => {
-    const { data } = await api.post(`/table-orders/${order._id}/checkout`, { discount, discountType, pay });
+    const { data } = await api.post(`/table-orders/${order._id}/checkout`, { discount, discountType, pay, redeemPoints });
     setLastBill(data.bill); setLastCust(data.customer);
     setSheet('receipt');
   };
@@ -300,19 +347,48 @@ export default function TableDetailPage({ order, config, freeTables, otherOrders
         </div>
       </div>
 
+      {newRequests.map(r => (
+        <div className="card" key={r.id} style={{ borderColor: 'var(--grape)' }}>
+          <div className="hd"><h2>📱 QR order{r.name ? ' — ' + r.name : ''}</h2><div className="spacer"></div><span className="hint">{tstr(r.at)}</span></div>
+          <div className="bd">
+            {r.items.map((i, ix) => (
+              <div key={ix} style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                <span>{i.name} × {i.qty}{i.meta && i.meta.note ? <span className="hint"> · {i.meta.note}</span> : null}</span>
+                <b className="num">{INR(i.amount)}</b>
+              </div>
+            ))}
+            <div className="row" style={{ marginTop: 12 }}>
+              <button className="btn primary" onClick={() => handleRequest(r, 'accept')}>Accept — bill me daalo</button>
+              <button className="btn danger" onClick={() => handleRequest(r, 'reject')}>Reject</button>
+            </div>
+          </div>
+        </div>
+      ))}
+
+      {readyKots.map(k => (
+        <div className="sess" key={k.no} style={{ borderColor: 'var(--mint)', background: 'var(--mint-soft)' }}>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <b>🍽 Kitchen: KOT #{k.no} ready hai</b><br />
+            <span className="hint">{k.items.map(i => i.name + ' ×' + i.qty).join(', ')}</span>
+          </span>
+          <button className="btn sm dark" onClick={() => markServed(k)}>Serve ho gaya</button>
+        </div>
+      ))}
+
       {playRunning && (
-        <div className="sess">
+        <div className="sess" style={playWarn && playWarn.state !== 'ok' ? { borderColor: 'var(--berry)', background: 'var(--berry-soft)' } : undefined}>
           <span className="tm">{Math.floor(playMins / 60)}h {String(playMins % 60).padStart(2, '0')}m</span>
           <span style={{ flex: 1, minWidth: 0 }}>
             <b>Play chal raha hai</b><br />
-            <span className="hint">{order.playKids} kid{order.playKids > 1 ? 's' : ''}{order.playMember ? ' · membership' : ''}</span>
+            <span className="hint">{order.playKids} kid{order.playKids > 1 ? 's' : ''}{order.playMember ? ' · membership' : ''}{order.playPlannedMins ? ' · ' + order.playPlannedMins + ' min liya' : ''}</span>
+            {playWarn && <><br /><b style={{ color: playWarn.state === 'ok' ? 'var(--muted)' : 'var(--berry)', fontSize: 13 }}>{playWarn.text}</b></>}
           </span>
           <button className="btn sm dark" onClick={endTimer}>End & bill</button>
         </div>
       )}
 
       <div className="card">
-        <div className="hd"><h2>Add to bill</h2>{cat === 'food' && <><div className="spacer"></div><button className="btn sm" onClick={printKOT}>Print KOT</button></>}</div>
+        <div className="hd"><h2>Add to bill</h2>{cat === 'food' && <><div className="spacer"></div><button className="btn sm" onClick={printKOT}>Print KOT{kotPending ? ` (${kotPending})` : ''}</button></>}</div>
         <div className="bd">
           <div className="seg" style={{ marginBottom: 14 }}>
             {CATS.map(c => (
@@ -343,7 +419,10 @@ export default function TableDetailPage({ order, config, freeTables, otherOrders
             discount={discount} setDiscount={setDiscount}
             discountType={discountType} setDiscountType={setDiscountType}
             canDiscount={isAdmin || config.staffDiscount !== false}
-            sub={sub} disc={disc} total={total} autoDiscount={autoDiscount} />
+            sub={sub} disc={disc} total={total} autoDiscount={autoDiscount}
+            onNote={addNote}
+            points={loyaltyOn && cust && !isNew ? cust.points || 0 : 0} pointValue={config.loyalty && config.loyalty.pointValue}
+            redeemPoints={redeemPoints} setRedeemPoints={setRedeemPoints} />
         </div>
       </div>
 

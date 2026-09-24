@@ -20,6 +20,8 @@ const customerSchema = new mongoose.Schema({
   phone: { type: String, required: true, unique: true, index: true },
   name: { type: String, default: '' },
   kid: { type: String, default: '' },
+  kidDob: { type: String, default: '' },
+  points: { type: Number, default: 0 },
   visits: { type: Number, default: 0 },
   totalSpend: { type: Number, default: 0 },
   lastVisit: { type: String, default: '' },

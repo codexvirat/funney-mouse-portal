@@ -7,13 +7,14 @@ exports.listSessions = asyncHandler(async (req, res) => {
 });
 
 exports.startSession = asyncHandler(async (req, res) => {
-  const { kids, phone, name, member } = req.body;
+  const { kids, phone, name, member, plannedMins } = req.body;
   const session = await Session.create({
     start: new Date().toISOString(),
     kids: Math.max(1, Number(kids) || 1),
     phone: phone || '',
     name: name || 'Walk-in',
-    member: !!member
+    member: !!member,
+    plannedMins: Math.max(0, Number(plannedMins) || 0)
   });
   res.status(201).json({ session });
 });

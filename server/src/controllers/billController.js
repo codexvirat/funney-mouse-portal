@@ -6,6 +6,7 @@ const Config = require('../models/Config');
 const { dstr, addDays } = require('../utils/date');
 const { memberActive } = require('../utils/member');
 const { inTimeWindow, nowHHMM } = require('../utils/time');
+const { audit } = require('../utils/audit');
 
 async function nextBillNo(date) {
   const c = await Counter.findByIdAndUpdate(date, { $inc: { seq: 1 } }, { new: true, upsert: true });
@@ -27,8 +28,9 @@ function cleanItems(items) {
 // manualDiscount is what the staff typed in; memberDiscountAmt/happyHourAmt
 // are auto-applied amounts (already computed upstream on the food+play
 // subtotal). All three stack, capped so together they never exceed the bill
-// subtotal.
-function computeTotals(items, manualDiscount, discountType, memberDiscountAmt, happyHourAmt, cgst, sgst) {
+// subtotal. Loyalty points (pointsAmt) come last and only fill whatever the
+// other discounts left.
+function computeTotals(items, manualDiscount, discountType, memberDiscountAmt, happyHourAmt, cgst, sgst, pointsAmt = 0) {
   const subtotal = items.reduce((a, i) => a + Number(i.amount || 0), 0);
   let manual = discountType === 'pct'
     ? Math.round(subtotal * (Number(manualDiscount) || 0) / 100)
@@ -36,9 +38,21 @@ function computeTotals(items, manualDiscount, discountType, memberDiscountAmt, h
   manual = Math.max(0, manual);
   const memberDiscount = Math.max(0, Math.min(subtotal, Number(memberDiscountAmt) || 0));
   const happyHourDiscount = Math.max(0, Math.min(subtotal, Number(happyHourAmt) || 0));
-  const discount = Math.min(subtotal, manual + memberDiscount + happyHourDiscount);
+  const before = Math.min(subtotal, manual + memberDiscount + happyHourDiscount);
+  const pointsDiscount = Math.max(0, Math.min(subtotal - before, Number(pointsAmt) || 0));
+  const discount = before + pointsDiscount;
   const total = Math.max(0, subtotal - discount) + cgst + sgst;
-  return { subtotal, discount, memberDiscount, happyHourDiscount, cgst, sgst, total };
+  return { subtotal, discount, memberDiscount, happyHourDiscount, pointsDiscount, manual, cgst, sgst, total };
+}
+
+// Rupee value of the points a customer wants to use on this bill — 0 when
+// loyalty is off or they don't have that many points.
+function pointsValue(customer, cfg, redeemPoints) {
+  const loyalty = cfg && cfg.loyalty;
+  const want = Math.floor(Number(redeemPoints) || 0);
+  if (!loyalty || !loyalty.enabled || !customer || want <= 0) return { points: 0, amount: 0 };
+  const points = Math.min(want, Math.floor(customer.points || 0));
+  return { points, amount: points * (Number(loyalty.pointValue) || 0) };
 }
 
 // Auto-discounts (membership %, happy hour) depend only on the item list and
@@ -83,7 +97,7 @@ function computeGST(itemsClean, cfg) {
 // Shared by the quick-bill flow (createBill) and the table checkout flow —
 // turns a set of items + discount + payment split into a saved Sale and
 // updates the attached Customer (visits/spend/membership).
-async function finalizeBill({ phone, name, items, discount, discountType, pay, staff, extra }) {
+async function finalizeBill({ phone, name, items, discount, discountType, pay, staff, extra, redeemPoints }) {
   if (!Array.isArray(items) || !items.length) {
     const err = new Error('Bill me items chahiye');
     err.status = 400;
@@ -103,7 +117,13 @@ async function finalizeBill({ phone, name, items, discount, discountType, pay, s
   const { memberDiscountAmt, happyHourAmt } = await computeAutoDiscounts(itemsClean, customer, cfg);
   const { cgst, sgst } = computeGST(itemsClean, cfg);
 
-  const { subtotal, discount: disc, memberDiscount, happyHourDiscount, total } = computeTotals(itemsClean, discount, discountType, memberDiscountAmt, happyHourAmt, cgst, sgst);
+  const redeem = pointsValue(customer, cfg, redeemPoints);
+  const { subtotal, discount: disc, memberDiscount, happyHourDiscount, pointsDiscount, manual, total } =
+    computeTotals(itemsClean, discount, discountType, memberDiscountAmt, happyHourAmt, cgst, sgst, redeem.amount);
+  const pointValue = (cfg && cfg.loyalty && Number(cfg.loyalty.pointValue)) || 1;
+  const pointsRedeemed = pointsDiscount > 0 ? Math.min(redeem.points, Math.ceil(pointsDiscount / pointValue)) : 0;
+  const loyaltyOn = !!(customer && cfg && cfg.loyalty && cfg.loyalty.enabled && Number(cfg.loyalty.earnPer) > 0);
+  const pointsEarned = loyaltyOn ? Math.floor(total / Number(cfg.loyalty.earnPer)) : 0;
 
   const payClean = {
     UPI: Number(pay && pay.UPI) || 0,
@@ -126,6 +146,7 @@ async function finalizeBill({ phone, name, items, discount, discountType, pay, s
     date, no, ts: new Date().toISOString(),
     phone: phone || '', name: name || 'Walk-in',
     items: itemsClean, subtotal, discount: disc, memberDiscount, happyHourDiscount, cgst, sgst, total, pay: payClean, kids,
+    pointsRedeemed, pointsDiscount, pointsEarned,
     staff, void: false,
     ...(extra || {})
   });
@@ -135,6 +156,7 @@ async function finalizeBill({ phone, name, items, discount, discountType, pay, s
     customer.totalSpend = (customer.totalSpend || 0) + total;
     customer.lastVisit = date;
     customer.recent = [{ date, total, billId: String(bill._id) }].concat(customer.recent || []).slice(0, 8);
+    customer.points = Math.max(0, (customer.points || 0) - pointsRedeemed + pointsEarned);
 
     const plan = itemsClean.find(i => i.cat === 'member');
     if (plan && plan.meta) {
@@ -164,6 +186,10 @@ async function finalizeBill({ phone, name, items, discount, discountType, pay, s
     await customer.save();
   }
 
+  if (manual > 0) {
+    await audit(staff, 'Discount', `Bill #${no} (${date}) — manual discount ₹${manual} on subtotal ₹${subtotal}`, bill._id);
+  }
+
   return { bill, customer };
 }
 
@@ -173,20 +199,22 @@ exports.finalizeBill = finalizeBill;
 // included) before payment, so what staff collects matches what checkout
 // will actually charge — checkout still recomputes and validates itself.
 exports.previewDiscount = asyncHandler(async (req, res) => {
-  const { phone, items } = req.body;
+  const { phone, items, discount, discountType, redeemPoints } = req.body;
   const itemsClean = cleanItems(Array.isArray(items) ? items : []);
   const subtotal = itemsClean.reduce((a, i) => a + i.amount, 0);
   const customer = phone ? await Customer.findOne({ phone }) : null;
   const cfg = await Config.findOne();
   const { memberDiscountAmt, happyHourAmt } = await computeAutoDiscounts(itemsClean, customer, cfg);
   const { cgst, sgst } = computeGST(itemsClean, cfg);
-  res.json({ subtotal, memberDiscount: memberDiscountAmt, happyHourDiscount: happyHourAmt, cgst, sgst });
+  const redeem = pointsValue(customer, cfg, redeemPoints);
+  const { pointsDiscount } = computeTotals(itemsClean, discount, discountType, memberDiscountAmt, happyHourAmt, cgst, sgst, redeem.amount);
+  res.json({ subtotal, memberDiscount: memberDiscountAmt, happyHourDiscount: happyHourAmt, pointsDiscount, cgst, sgst });
 });
 
 exports.createBill = asyncHandler(async (req, res) => {
-  const { phone, name, items, discount, discountType, pay } = req.body;
+  const { phone, name, items, discount, discountType, pay, redeemPoints } = req.body;
   try {
-    const { bill, customer } = await finalizeBill({ phone, name, items, discount, discountType, pay, staff: req.user.username });
+    const { bill, customer } = await finalizeBill({ phone, name, items, discount, discountType, pay, redeemPoints, staff: req.user.username });
     res.status(201).json({ bill, customer });
   } catch (e) {
     res.status(e.status || 500);
@@ -245,8 +273,8 @@ exports.editBill = asyncHandler(async (req, res) => {
 
   const cfg = await Config.findOne();
   const { cgst, sgst } = computeGST(itemsClean, cfg);
-  const { subtotal, discount: disc, memberDiscount, happyHourDiscount, total } =
-    computeTotals(itemsClean, discount, discountType, bill.memberDiscount, bill.happyHourDiscount, cgst, sgst);
+  const { subtotal, discount: disc, memberDiscount, happyHourDiscount, pointsDiscount, total } =
+    computeTotals(itemsClean, discount, discountType, bill.memberDiscount, bill.happyHourDiscount, cgst, sgst, bill.pointsDiscount);
 
   const payClean = {
     UPI: Number(pay && pay.UPI) || 0,
@@ -268,6 +296,7 @@ exports.editBill = asyncHandler(async (req, res) => {
   bill.discount = disc;
   bill.memberDiscount = memberDiscount;
   bill.happyHourDiscount = happyHourDiscount;
+  bill.pointsDiscount = pointsDiscount;
   bill.cgst = cgst;
   bill.sgst = sgst;
   bill.total = total;
@@ -285,6 +314,7 @@ exports.editBill = asyncHandler(async (req, res) => {
     }
   }
 
+  await audit(req.user, 'Bill edited', `Bill #${bill.no} (${bill.date}) — total ₹${oldTotal} → ₹${total}`, bill._id);
   res.json({ bill });
 });
 
@@ -309,6 +339,7 @@ exports.voidBill = asyncHandler(async (req, res) => {
       customer.visits = Math.max(0, (customer.visits || 1) - 1);
       customer.totalSpend = Math.max(0, (customer.totalSpend || 0) - bill.total);
       customer.recent = (customer.recent || []).filter(r => r.billId !== String(bill._id));
+      customer.points = Math.max(0, (customer.points || 0) + (bill.pointsRedeemed || 0) - (bill.pointsEarned || 0));
       const sold = bill.items.find(i => i.cat === 'member');
       if (sold && customer.membership && customer.membership.startedAt === bill.date) {
         if ((customer.membership.renewals || 0) > 0) {
@@ -320,6 +351,7 @@ exports.voidBill = asyncHandler(async (req, res) => {
       await customer.save();
     }
   }
+  await audit(req.user, 'Bill void', `Bill #${bill.no} (${bill.date}) ₹${bill.total}${bill.voidReason ? ' — ' + bill.voidReason : ''}`, bill._id);
   res.json({ bill, warning });
 });
 
@@ -340,5 +372,6 @@ exports.settleDue = asyncHandler(async (req, res) => {
   bill.pay[k] = (bill.pay[k] || 0) + due;
   bill.dueSettledAt = new Date().toISOString();
   await bill.save();
+  await audit(req.user, 'Due settled', `Bill #${bill.no} (${bill.date}) ₹${due} via ${k}`, bill._id);
   res.json({ bill });
 });

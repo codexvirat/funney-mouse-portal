@@ -31,3 +31,18 @@ export function tableRollup(bills) {
   });
   return Object.values(byTable).sort((a, b) => b.revenue - a.revenue);
 }
+
+// Sales per waiter (from the waiter name saved on table bills).
+export function waiterRollup(bills) {
+  const byWaiter = {};
+  bills.forEach(b => {
+    if (b.void || !b.waiterName) return;
+    const k = b.waiterName.trim();
+    const row = byWaiter[k] || { name: k, bills: 0, revenue: 0, guests: 0 };
+    row.bills++;
+    row.revenue += b.total;
+    row.guests += (b.adults || 0) + (b.kids || 0);
+    byWaiter[k] = row;
+  });
+  return Object.values(byWaiter).sort((a, b) => b.revenue - a.revenue);
+}
