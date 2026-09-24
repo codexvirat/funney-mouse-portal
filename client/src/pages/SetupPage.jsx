@@ -66,6 +66,14 @@ async function printTableQRs(tables, shopName) {
   setTimeout(() => window.print(), 300);
 }
 
+const ROLES = [
+  { key: 'staff', label: 'Staff (counter)' },
+  { key: 'captain', label: 'Captain / waiter' },
+  { key: 'kitchen', label: 'Kitchen (KOT)' },
+  { key: 'admin', label: 'Admin' },
+  { key: 'owner', label: 'Owner (reports PIN)' }
+];
+
 function UsersCard() {
   const toast = useToast();
   const [users, setUsers] = useState([]);
@@ -117,10 +125,14 @@ function UsersCard() {
             onChange={e => setForm({ ...form, password: isOwnerRole ? e.target.value.replace(/\D/g, '').slice(0, 8) : e.target.value })} /></label>
         <label className="f" style={{ margin: 0, flex: '1 1 130px' }}><span>Name</span>
           <input type="text" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></label>
-        <label className="f" style={{ margin: 0, flex: '0 0 150px' }}><span>Role</span>
-          <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}>
-            <option value="staff">Staff</option><option value="admin">Admin</option><option value="owner">Owner (reports PIN)</option><option value="kitchen">Kitchen (KOT)</option><option value="captain">Captain / waiter</option>
-          </select></label>
+        <div style={{ flex: '1 1 100%' }}>
+          <span className="hint" style={{ display: 'block', marginBottom: 6 }}>Role chuniye</span>
+          <div className="chips">
+            {ROLES.map(r => (
+              <button type="button" key={r.key} className="chip" aria-pressed={form.role === r.key} onClick={() => setForm({ ...form, role: r.key })}>{r.label}</button>
+            ))}
+          </div>
+        </div>
         <button className="btn dark" type="submit" style={{ flex: '0 0 auto' }}>+ Add user</button>
       </form>
       <p className="hint" style={{ margin: '0 0 14px' }}>
@@ -135,7 +147,7 @@ function UsersCard() {
             <tbody>
               {users.map(u => (
                 <tr key={u._id}>
-                  <td>{u.username}</td><td>{u.name || '—'}</td><td>{u.role}</td>
+                  <td>{u.username}</td><td>{u.name || '—'}</td><td>{(ROLES.find(r => r.key === u.role) || { label: u.role }).label}</td>
                   <td>{u.active ? 'Active' : 'Disabled'}</td>
                   <td style={{ whiteSpace: 'nowrap' }}>
                     <button className="btn sm ghost" onClick={() => toggleActive(u)}>{u.active ? 'Disable' : 'Enable'}</button>{' '}
