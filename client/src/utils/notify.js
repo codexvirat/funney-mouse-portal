@@ -27,3 +27,34 @@ export function playAlert(start, plannedMins) {
   if (left <= 5) return { state: 'warn', text: `${left} min baaki` };
   return { state: 'ok', text: `${left} min baaki` };
 }
+
+// Service worker used only to show notifications (see public/sw.js).
+export function registerNotifyWorker() {
+  if (!('serviceWorker' in navigator)) return Promise.resolve(null);
+  return navigator.serviceWorker.register('/sw.js').catch(() => null);
+}
+
+// Phone/desktop system notification (plus vibration). Only works after the
+// user has allowed notifications — see askNotifyPermission. Goes through the
+// service worker when there is one, since Android Chrome refuses
+// `new Notification()`.
+export function systemNotify(title, body, tag) {
+  try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) { /* ignore */ }
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  const opts = { body, tag, renotify: true, vibrate: [200, 100, 200] };
+  const viaPage = () => { try { new Notification(title, opts); } catch (e) { /* not allowed here */ } };
+  if (!('serviceWorker' in navigator)) { viaPage(); return; }
+  navigator.serviceWorker.getRegistration()
+    .then(reg => (reg ? reg.showNotification(title, opts) : viaPage()))
+    .catch(viaPage);
+}
+
+export function notifyPermission() {
+  return typeof Notification === 'undefined' ? 'unsupported' : Notification.permission;
+}
+
+export async function askNotifyPermission() {
+  if (typeof Notification === 'undefined') return 'unsupported';
+  await registerNotifyWorker();
+  return Notification.requestPermission();
+}

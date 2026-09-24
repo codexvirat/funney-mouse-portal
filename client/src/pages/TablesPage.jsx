@@ -6,6 +6,9 @@ import { billSubtotal } from '../utils/bill';
 import { INR } from '../utils/money';
 import Sheet from '../components/Sheet';
 import BookingsCard from '../components/BookingsCard';
+import CaptainAlerts from '../components/CaptainAlerts';
+import WaiterInput, { useCaptains, captainFor } from '../components/WaiterInput';
+import { useAuth } from '../context/AuthContext';
 import TableDetailPage from './TableDetailPage';
 import { useLiveEvents } from '../hooks/useLiveEvents';
 import { beep, playAlert } from '../utils/notify';
@@ -24,6 +27,10 @@ const PAY_MODES = ['CASH', 'UPI', 'CARD'];
 
 function OpenTableSheet({ open, table, booking, onClose, onOpened }) {
   const toast = useToast();
+  const { user } = useAuth();
+  const captains = useCaptains();
+  const isCaptain = user.role === 'captain';
+  const myName = user.name || user.username;
   const [adults, setAdults] = useState(1);
   const [kids, setKids] = useState(0);
   const [phone, setPhone] = useState('');
@@ -37,10 +44,10 @@ function OpenTableSheet({ open, table, booking, onClose, onOpened }) {
     if (open) {
       if (booking) {
         setAdults(booking.guests || 1); setKids(0); setPhone(booking.phone || '');
-        setReserveOnly(false); setWaiterName(''); setAdvance(booking.advance || 0); setAdvanceMode(booking.advanceMode || 'CASH');
+        setReserveOnly(false); setWaiterName(isCaptain ? myName : ''); setAdvance(booking.advance || 0); setAdvanceMode(booking.advanceMode || 'CASH');
       } else {
         setAdults(1); setKids(0); setPhone(''); setReserveOnly(false);
-        setWaiterName(''); setAdvance(0); setAdvanceMode('CASH');
+        setWaiterName(isCaptain ? myName : ''); setAdvance(0); setAdvanceMode('CASH');
       }
     }
   }, [open, table, booking]);
@@ -60,7 +67,7 @@ function OpenTableSheet({ open, table, booking, onClose, onOpened }) {
       const { data } = await api.post('/table-orders', {
         tableId: table.id, tableName: table.name,
         phone: phone.length === 10 ? phone : '', name, adults, kids,
-        reserved: reserveOnly, waiterName,
+        reserved: reserveOnly, waiterName, waiterUser: captainFor(waiterName, captains) || (isCaptain && waiterName === myName ? user.username : ''),
         advance: reserveOnly ? 0 : advance, advanceMode,
         bookingId: booking ? booking._id : undefined
       });
@@ -101,8 +108,8 @@ function OpenTableSheet({ open, table, booking, onClose, onOpened }) {
         <input type="tel" inputMode="numeric" maxLength={10} placeholder="10 digit number"
           value={phone} onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))} />
       </label>
-      <label className="f"><span>Waiter (optional)</span>
-        <input type="text" placeholder="Waiter ka naam" value={waiterName} onChange={e => setWaiterName(e.target.value)} />
+      <label className="f"><span>Waiter / captain (optional)</span>
+        <WaiterInput value={waiterName} onChange={setWaiterName} captains={captains} />
       </label>
       {!reserveOnly && (
         <div className="row">
@@ -129,6 +136,8 @@ function OpenTableSheet({ open, table, booking, onClose, onOpened }) {
 export default function TablesPage() {
   const { config } = useConfig();
   const toast = useToast();
+  const { user } = useAuth();
+  const isCaptain = user.role === 'captain';
   const [orders, setOrders] = useState([]);
   const [openId, setOpenId] = useState(null);
   const [pickTable, setPickTable] = useState(null);
@@ -162,7 +171,8 @@ export default function TablesPage() {
       now.add(k);
       if (seenAlerts.current && !seenAlerts.current.has(k)) fresh.push(o.tableName + ' — ' + a.text);
     }));
-    if (fresh.length) { beep(); toast(fresh[0]); }
+    // Captains get their own (table-specific) alerts from CaptainAlerts.
+    if (fresh.length && !isCaptain) { beep(); toast(fresh[0]); }
     seenAlerts.current = now;
   });
 
@@ -175,6 +185,8 @@ export default function TablesPage() {
 
   if (activeOrder) {
     return (
+      <>
+      {isCaptain && <CaptainAlerts hidden me={user.username} orders={orders} onSync={() => {}} />}
       <TableDetailPage
         order={activeOrder}
         config={config}
@@ -186,14 +198,19 @@ export default function TablesPage() {
         onTransferred={(updated) => { setOrders(prev => prev.map(o => o._id === updated._id ? updated : o)); setOpenId(null); }}
         onMerged={() => { setOpenId(null); load(); }}
       />
+      </>
     );
   }
 
   return (
     <>
-      <BookingsCard tables={tables} freeTables={freeTables}
-        onUseBooking={(b) => { setActiveBooking(b); toast('Ab kisi free table par tap karein — ' + b.name + ' ke liye'); }}
-        onAssigned={(created) => setOrders(prev => [...prev, ...created])} />
+      {isCaptain ? (
+        <CaptainAlerts me={user.username} orders={orders} onSync={(u) => setOrders(prev => prev.map(o => o._id === u._id ? u : o))} />
+      ) : (
+        <BookingsCard tables={tables} freeTables={freeTables}
+          onUseBooking={(b) => { setActiveBooking(b); toast('Ab kisi free table par tap karein — ' + b.name + ' ke liye'); }}
+          onAssigned={(created) => setOrders(prev => [...prev, ...created])} />
+      )}
 
       {activeBooking && (
         <div className="card" style={{ borderColor: 'var(--accent)' }}>

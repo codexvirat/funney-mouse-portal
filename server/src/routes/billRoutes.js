@@ -3,7 +3,7 @@ const { protect, adminOnly, allowRoles } = require('../middleware/auth');
 const ctrl = require('../controllers/billController');
 
 router.post('/', protect, allowRoles('admin', 'staff'), ctrl.createBill);
-router.post('/preview', protect, allowRoles('admin', 'staff'), ctrl.previewDiscount);
+router.post('/preview', protect, allowRoles('admin', 'staff', 'captain'), ctrl.previewDiscount);
 // Reports are readable by admins and by the PIN-only owner portal (read-only).
 router.get('/', protect, allowRoles('admin', 'owner'), ctrl.getBills);
 router.patch('/:id/edit', protect, adminOnly, ctrl.editBill);

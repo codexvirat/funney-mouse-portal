@@ -119,13 +119,14 @@ function UsersCard() {
           <input type="text" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></label>
         <label className="f" style={{ margin: 0, flex: '0 0 150px' }}><span>Role</span>
           <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}>
-            <option value="staff">Staff</option><option value="admin">Admin</option><option value="owner">Owner (reports PIN)</option><option value="kitchen">Kitchen (KOT)</option>
+            <option value="staff">Staff</option><option value="admin">Admin</option><option value="owner">Owner (reports PIN)</option><option value="kitchen">Kitchen (KOT)</option><option value="captain">Captain / waiter</option>
           </select></label>
         <button className="btn dark" type="submit" style={{ flex: '0 0 auto' }}>+ Add user</button>
       </form>
       <p className="hint" style={{ margin: '0 0 14px' }}>
         Role "Owner" sirf reports dekh sakta hai (Day end — void/settle nahi) aur alag se <b>{window.location.origin}/owner</b> par PIN se login karta hai, poora staff/admin login flow use nahi karna padta.
         Role "Kitchen" normal login page se login karta hai aur sirf table-wise KOT screen dekhta hai — naye food orders aur unka print.
+        Role "Captain" (waiter) apne phone se login karke table khol sakta hai, order le sakta hai, KOT bhej sakta hai — aur kitchen "Ready" kare to usko notification aata hai. Bill aur cancel staff/admin hi karenge. User ka "Name" wahi rakhein jo table par Waiter me likha jayega.
       </p>
       {loading ? <p className="hint">Loading…</p> : (
         <div className="scrollx">

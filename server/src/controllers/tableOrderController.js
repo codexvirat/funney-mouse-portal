@@ -15,7 +15,10 @@ exports.listTableOrders = asyncHandler(async (req, res) => {
 });
 
 exports.openTable = asyncHandler(async (req, res) => {
-  const { tableId, tableName, phone, name, adults, kids, reserved, reservedNote, waiterName, advance, advanceMode, bookingId } = req.body;
+  const { tableId, tableName, phone, name, adults, kids, reserved, reservedNote, advance, advanceMode, bookingId } = req.body;
+  let { waiterName, waiterUser } = req.body;
+  // A captain opening a table serves it unless someone else was picked.
+  if (req.user.role === 'captain' && !waiterUser) { waiterUser = req.user.username; waiterName = waiterName || req.user.name || req.user.username; }
   if (!tableId) {
     res.status(400);
     throw new Error('Table select karein');
@@ -34,6 +37,7 @@ exports.openTable = asyncHandler(async (req, res) => {
     reserved: !!reserved,
     reservedNote: reservedNote || '',
     waiterName: waiterName || '',
+    waiterUser: waiterUser || '',
     advance: Math.max(0, Number(advance) || 0),
     advanceMode: advance ? (advanceMode || 'CASH') : '',
     bookingId: bookingId || '',
@@ -52,7 +56,7 @@ exports.updateTableOrder = asyncHandler(async (req, res) => {
     res.status(404);
     throw new Error('Table order not found');
   }
-  const { phone, name, adults, kids, items, reserved, reservedNote, waiterName, advance, advanceMode } = req.body;
+  const { phone, name, adults, kids, items, reserved, reservedNote, waiterName, waiterUser, advance, advanceMode } = req.body;
   if (phone !== undefined) order.phone = phone;
   if (name !== undefined) order.name = name;
   if (adults !== undefined) order.adults = Math.max(0, Number(adults) || 0);
@@ -61,6 +65,7 @@ exports.updateTableOrder = asyncHandler(async (req, res) => {
   if (reserved !== undefined) order.reserved = !!reserved;
   if (reservedNote !== undefined) order.reservedNote = reservedNote;
   if (waiterName !== undefined) order.waiterName = waiterName;
+  if (waiterUser !== undefined) order.waiterUser = waiterUser;
   if (advance !== undefined) order.advance = Math.max(0, Number(advance) || 0);
   if (advanceMode !== undefined) order.advanceMode = advanceMode;
   await order.save();

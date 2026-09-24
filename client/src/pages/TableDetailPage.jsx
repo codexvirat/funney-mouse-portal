@@ -21,6 +21,7 @@ import PayBar from '../components/PayBar';
 import PaymentSheet from '../components/PaymentSheet';
 import ReceiptSheet from '../components/ReceiptSheet';
 import Sheet from '../components/Sheet';
+import WaiterInput, { useCaptains, captainFor } from '../components/WaiterInput';
 
 const CATS = [
   { key: 'play', label: 'Play area' },
@@ -33,7 +34,10 @@ const CATS = [
 // TableOrder so it survives refresh/another device — unlike BillPage's
 // quick-bill flow, which only ever keeps one draft in local React state.
 export default function TableDetailPage({ order, config, freeTables, otherOrders, onSyncOrder, onBack, onClosed, onTransferred, onMerged }) {
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
+  // Captains run the table but billing/cancel/merge stay with the counter.
+  const canBill = user.role !== 'captain';
+  const captains = useCaptains();
   const toast = useToast();
 
   const [phone, setPhone] = useState(order.phone || '');
@@ -145,7 +149,7 @@ export default function TableDetailPage({ order, config, freeTables, otherOrders
 
   const bumpAdults = (d) => { const v = Math.max(0, adults + d); setAdults(v); persist({ adults: v }); };
   const bumpKids = (d) => { const v = Math.max(0, kidCount + d); setKidCount(v); persist({ kids: v }); };
-  const saveWaiter = () => persist({ waiterName });
+  const saveWaiter = () => persist({ waiterName, waiterUser: captainFor(waiterName, captains) });
 
   const sub = billSubtotal(items);
   const disc = billDiscount(items, discount, discountType);
@@ -303,7 +307,7 @@ export default function TableDetailPage({ order, config, freeTables, otherOrders
           <p className="hint">{order.adults} adults · {order.kids} kids{order.waiterName ? ' · Waiter: ' + order.waiterName : ''}</p>
           <div className="row" style={{ marginTop: 14 }}>
             <button className="btn primary" style={{ flex: '2 1 160px' }} onClick={startService}>Guest aa gaye — start service</button>
-            <button className="btn danger" style={{ flex: '1 1 120px' }} onClick={cancelTable}>Cancel reservation</button>
+            {canBill && <button className="btn danger" style={{ flex: '1 1 120px' }} onClick={cancelTable}>Cancel reservation</button>}
           </div>
         </div></div>
       </>
@@ -315,13 +319,13 @@ export default function TableDetailPage({ order, config, freeTables, otherOrders
       <div className="row" style={{ alignItems: 'center', marginBottom: 4, flexWrap: 'nowrap' }}>
         <button className="btn ghost sm" style={{ flex: '0 0 auto' }} onClick={onBack}>← Tables</button>
         <h2 style={{ margin: '0 0 0 4px', fontSize: 17, flex: 1, minWidth: 0 }}>{order.tableName}</h2>
-        <button className="btn sm danger" style={{ flex: '0 0 auto' }} onClick={cancelTable}>Cancel table</button>
+        {canBill && <button className="btn sm danger" style={{ flex: '0 0 auto' }} onClick={cancelTable}>Cancel table</button>}
       </div>
 
       <div className="card">
         <div className="hd"><h2>Guests</h2><div className="spacer"></div>
           <button className="btn sm ghost" onClick={() => setSheet('transfer')}>Transfer</button>{' '}
-          <button className="btn sm ghost" onClick={() => setSheet('merge')}>Merge</button>
+          {canBill && <button className="btn sm ghost" onClick={() => setSheet('merge')}>Merge</button>}
         </div>
         <div className="bd">
           <div className="row">
@@ -333,8 +337,8 @@ export default function TableDetailPage({ order, config, freeTables, otherOrders
               <span className="hint" style={{ display: 'block', marginBottom: 5 }}>Kids</span>
               <div className="stepper"><button onClick={() => bumpKids(-1)}>−</button><b>{kidCount}</b><button onClick={() => bumpKids(1)}>+</button></div>
             </div>
-            <label className="f" style={{ margin: 0, flex: '1 1 140px' }}><span>Waiter</span>
-              <input type="text" value={waiterName} onChange={e => setWaiterName(e.target.value)} onBlur={saveWaiter} />
+            <label className="f" style={{ margin: 0, flex: '1 1 140px' }}><span>Waiter / captain</span>
+              <WaiterInput value={waiterName} onChange={setWaiterName} onBlur={saveWaiter} captains={captains} />
             </label>
           </div>
           {overCapacity && <p className="hint" style={{ color: 'var(--berry)', marginTop: 10 }}>Table ki seating {capacity} hai — guests zyada hain.</p>}
@@ -429,7 +433,9 @@ export default function TableDetailPage({ order, config, freeTables, otherOrders
         </div>
       </div>
 
-      <PayBar itemsCount={items.length} kids={kidsOnBill(items)} total={total} onClear={clearBill} onPay={() => setSheet('pay')} />
+      {canBill
+        ? <PayBar itemsCount={items.length} kids={kidsOnBill(items)} total={total} onClear={clearBill} onPay={() => setSheet('pay')} />
+        : <p className="hint" style={{ textAlign: 'center' }}>Bill counter (staff) banayega — total abhi {INR(total)}.</p>}
 
       <PaymentSheet open={sheet === 'pay'} total={total} onClose={() => setSheet(null)} onSave={onSaveBill} initialPay={initialPay} initialNote={initialNote} />
       <ReceiptSheet open={sheet === 'receipt'} bill={lastBill} customer={lastCust} config={config} onClose={closeReceipt} doneLabel="Back to tables" />

@@ -14,7 +14,7 @@ function publicUser(u) {
 }
 
 function normalizeRole(role) {
-  return ['admin', 'owner', 'kitchen'].includes(role) ? role : 'staff';
+  return ['admin', 'owner', 'kitchen', 'captain'].includes(role) ? role : 'staff';
 }
 
 exports.login = asyncHandler(async (req, res) => {
@@ -51,6 +51,12 @@ exports.ownerLogin = asyncHandler(async (req, res) => {
   }
   res.status(401);
   throw new Error('Galat PIN');
+});
+
+// Captains (waiters with their own login) that a table can be assigned to.
+exports.listCaptains = asyncHandler(async (req, res) => {
+  const users = await User.find({ role: 'captain', active: true }).select('username name').sort('name');
+  res.json({ captains: users.map(u => ({ username: u.username, name: u.name || u.username })) });
 });
 
 exports.listUsers = asyncHandler(async (req, res) => {

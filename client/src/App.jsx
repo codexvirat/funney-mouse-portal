@@ -15,6 +15,7 @@ import CashPage from './pages/CashPage';
 import AuditPage from './pages/AuditPage';
 
 const STAFF_VIEWS = ['tables', 'bill', 'cash'];
+const CAPTAIN_VIEWS = ['tables'];
 
 export default function App() {
   const { user, ready, isAdmin } = useAuth();
@@ -28,8 +29,9 @@ export default function App() {
   }, [view]);
 
   useEffect(() => {
-    if (!isAdmin && !STAFF_VIEWS.includes(view)) setView('tables');
-  }, [isAdmin, view]);
+    const allowed = user && user.role === 'captain' ? CAPTAIN_VIEWS : STAFF_VIEWS;
+    if (!isAdmin && !allowed.includes(view)) setView('tables');
+  }, [isAdmin, view, user]);
 
   if (!ready) return null;
   if (!user) return <LoginPage />;
@@ -45,7 +47,7 @@ export default function App() {
   }
 
   const goView = (v) => {
-    if (!STAFF_VIEWS.includes(v) && !isAdmin) return;
+    if (!isAdmin && !(user.role === 'captain' ? CAPTAIN_VIEWS : STAFF_VIEWS).includes(v)) return;
     setView(v);
   };
 

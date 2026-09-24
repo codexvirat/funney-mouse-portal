@@ -50,6 +50,8 @@ const tableOrderSchema = new mongoose.Schema({
   reserved: { type: Boolean, default: false },
   reservedNote: { type: String, default: '' },
   waiterName: { type: String, default: '' },
+  // Username of the captain login serving this table — gets the "food ready" alert.
+  waiterUser: { type: String, default: '' },
   advance: { type: Number, default: 0 },
   advanceMode: { type: String, default: '' },
   kots: { type: [kotSchema], default: [] },
