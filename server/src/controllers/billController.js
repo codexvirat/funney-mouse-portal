@@ -30,7 +30,7 @@ function cleanItems(items) {
 // subtotal). All three stack, capped so together they never exceed the bill
 // subtotal. Loyalty points (pointsAmt) come last and only fill whatever the
 // other discounts left.
-function computeTotals(items, manualDiscount, discountType, memberDiscountAmt, happyHourAmt, cgst, sgst, pointsAmt = 0) {
+function computeTotals(items, manualDiscount, discountType, memberDiscountAmt, happyHourAmt, cgst, sgst, pointsAmt = 0, serviceCharge = 0) {
   const subtotal = items.reduce((a, i) => a + Number(i.amount || 0), 0);
   let manual = discountType === 'pct'
     ? Math.round(subtotal * (Number(manualDiscount) || 0) / 100)
@@ -41,8 +41,8 @@ function computeTotals(items, manualDiscount, discountType, memberDiscountAmt, h
   const before = Math.min(subtotal, manual + memberDiscount + happyHourDiscount);
   const pointsDiscount = Math.max(0, Math.min(subtotal - before, Number(pointsAmt) || 0));
   const discount = before + pointsDiscount;
-  const total = Math.max(0, subtotal - discount) + cgst + sgst;
-  return { subtotal, discount, memberDiscount, happyHourDiscount, pointsDiscount, manual, cgst, sgst, total };
+  const total = Math.max(0, subtotal - discount) + cgst + sgst + serviceCharge;
+  return { subtotal, discount, memberDiscount, happyHourDiscount, pointsDiscount, manual, cgst, sgst, serviceCharge, total };
 }
 
 // Rupee value of the points a customer wants to use on this bill — 0 when
@@ -94,10 +94,21 @@ function computeGST(itemsClean, cfg) {
   };
 }
 
+// Service charge typed on the bill: a flat ₹ amount, or a % of the food
+// subtotal (or the whole subtotal when Setup says so). Not taxed.
+function computeService(itemsClean, cfg, value, type) {
+  const v = Math.max(0, Number(value) || 0);
+  if (!v) return { serviceCharge: 0, serviceChargePct: 0 };
+  if (type !== 'pct') return { serviceCharge: Math.round(v), serviceChargePct: 0 };
+  const onAll = cfg && cfg.serviceChargeOn === 'all';
+  const base = itemsClean.filter(i => onAll || i.cat === 'food').reduce((a, i) => a + i.amount, 0);
+  return { serviceCharge: Math.round(base * v / 100), serviceChargePct: v };
+}
+
 // Shared by the quick-bill flow (createBill) and the table checkout flow —
 // turns a set of items + discount + payment split into a saved Sale and
 // updates the attached Customer (visits/spend/membership).
-async function finalizeBill({ phone, name, kid, kidDob, anniversary, items, discount, discountType, pay, staff, extra, redeemPoints }) {
+async function finalizeBill({ phone, name, kid, kidDob, anniversary, items, discount, discountType, pay, staff, extra, redeemPoints, serviceCharge: scValue, serviceChargeType }) {
   if (!Array.isArray(items) || !items.length) {
     const err = new Error('Bill me items chahiye');
     err.status = 400;
@@ -122,9 +133,11 @@ async function finalizeBill({ phone, name, kid, kidDob, anniversary, items, disc
   const { memberDiscountAmt, happyHourAmt } = await computeAutoDiscounts(itemsClean, customer, cfg);
   const { cgst, sgst } = computeGST(itemsClean, cfg);
 
+  const { serviceCharge, serviceChargePct } = computeService(itemsClean, cfg, scValue, serviceChargeType);
+
   const redeem = pointsValue(customer, cfg, redeemPoints);
   const { subtotal, discount: disc, memberDiscount, happyHourDiscount, pointsDiscount, manual, total } =
-    computeTotals(itemsClean, discount, discountType, memberDiscountAmt, happyHourAmt, cgst, sgst, redeem.amount);
+    computeTotals(itemsClean, discount, discountType, memberDiscountAmt, happyHourAmt, cgst, sgst, redeem.amount, serviceCharge);
   const pointValue = (cfg && cfg.loyalty && Number(cfg.loyalty.pointValue)) || 1;
   const pointsRedeemed = pointsDiscount > 0 ? Math.min(redeem.points, Math.ceil(pointsDiscount / pointValue)) : 0;
   const loyaltyOn = !!(customer && cfg && cfg.loyalty && cfg.loyalty.enabled && Number(cfg.loyalty.earnPer) > 0);
@@ -150,7 +163,7 @@ async function finalizeBill({ phone, name, kid, kidDob, anniversary, items, disc
   const bill = await Sale.create({
     date, no, ts: new Date().toISOString(),
     phone: phone || '', name: name || 'Walk-in',
-    items: itemsClean, subtotal, discount: disc, memberDiscount, happyHourDiscount, cgst, sgst, total, pay: payClean, kids,
+    items: itemsClean, subtotal, discount: disc, memberDiscount, happyHourDiscount, cgst, sgst, serviceCharge, serviceChargePct, total, pay: payClean, kids,
     pointsRedeemed, pointsDiscount, pointsEarned,
     staff, void: false,
     ...(extra || {})
@@ -204,22 +217,23 @@ exports.finalizeBill = finalizeBill;
 // included) before payment, so what staff collects matches what checkout
 // will actually charge — checkout still recomputes and validates itself.
 exports.previewDiscount = asyncHandler(async (req, res) => {
-  const { phone, items, discount, discountType, redeemPoints } = req.body;
+  const { phone, items, discount, discountType, redeemPoints, serviceCharge: scValue, serviceChargeType } = req.body;
   const itemsClean = cleanItems(Array.isArray(items) ? items : []);
   const subtotal = itemsClean.reduce((a, i) => a + i.amount, 0);
   const customer = phone ? await Customer.findOne({ phone }) : null;
   const cfg = await Config.findOne();
   const { memberDiscountAmt, happyHourAmt } = await computeAutoDiscounts(itemsClean, customer, cfg);
   const { cgst, sgst } = computeGST(itemsClean, cfg);
+  const { serviceCharge } = computeService(itemsClean, cfg, scValue, serviceChargeType);
   const redeem = pointsValue(customer, cfg, redeemPoints);
-  const { pointsDiscount } = computeTotals(itemsClean, discount, discountType, memberDiscountAmt, happyHourAmt, cgst, sgst, redeem.amount);
-  res.json({ subtotal, memberDiscount: memberDiscountAmt, happyHourDiscount: happyHourAmt, pointsDiscount, cgst, sgst });
+  const { pointsDiscount } = computeTotals(itemsClean, discount, discountType, memberDiscountAmt, happyHourAmt, cgst, sgst, redeem.amount, serviceCharge);
+  res.json({ subtotal, memberDiscount: memberDiscountAmt, happyHourDiscount: happyHourAmt, pointsDiscount, cgst, sgst, serviceCharge });
 });
 
 exports.createBill = asyncHandler(async (req, res) => {
-  const { phone, name, kid, kidDob, anniversary, items, discount, discountType, pay, redeemPoints } = req.body;
+  const { phone, name, kid, kidDob, anniversary, items, discount, discountType, pay, redeemPoints, serviceCharge, serviceChargeType } = req.body;
   try {
-    const { bill, customer } = await finalizeBill({ phone, name, kid, kidDob, anniversary, items, discount, discountType, pay, redeemPoints, staff: req.user.username });
+    const { bill, customer } = await finalizeBill({ phone, name, kid, kidDob, anniversary, items, discount, discountType, pay, redeemPoints, serviceCharge, serviceChargeType, staff: req.user.username });
     res.status(201).json({ bill, customer });
   } catch (e) {
     res.status(e.status || 500);
@@ -270,6 +284,10 @@ exports.editBill = asyncHandler(async (req, res) => {
   }
 
   const { items, discount, discountType, pay } = req.body;
+  // Not sent -> keep the bill's own service charge (same % re-applied, or
+  // the same flat amount).
+  const scValue = req.body.serviceCharge !== undefined ? req.body.serviceCharge : (bill.serviceChargePct || bill.serviceCharge || 0);
+  const scType = req.body.serviceChargeType || (bill.serviceChargePct ? 'pct' : 'amt');
   if (!Array.isArray(items) || !items.length) {
     res.status(400);
     throw new Error('Bill me items chahiye');
@@ -278,8 +296,9 @@ exports.editBill = asyncHandler(async (req, res) => {
 
   const cfg = await Config.findOne();
   const { cgst, sgst } = computeGST(itemsClean, cfg);
+  const { serviceCharge, serviceChargePct } = computeService(itemsClean, cfg, scValue, scType);
   const { subtotal, discount: disc, memberDiscount, happyHourDiscount, pointsDiscount, total } =
-    computeTotals(itemsClean, discount, discountType, bill.memberDiscount, bill.happyHourDiscount, cgst, sgst, bill.pointsDiscount);
+    computeTotals(itemsClean, discount, discountType, bill.memberDiscount, bill.happyHourDiscount, cgst, sgst, bill.pointsDiscount, serviceCharge);
 
   const payClean = {
     UPI: Number(pay && pay.UPI) || 0,
@@ -304,6 +323,8 @@ exports.editBill = asyncHandler(async (req, res) => {
   bill.pointsDiscount = pointsDiscount;
   bill.cgst = cgst;
   bill.sgst = sgst;
+  bill.serviceCharge = serviceCharge;
+  bill.serviceChargePct = serviceChargePct;
   bill.total = total;
   bill.pay = payClean;
   bill.kids = kids;

@@ -3,7 +3,10 @@ import { INR } from '../utils/money';
 // onNote (tables only): lets staff add a kitchen note like "less spicy" to a
 // food line. points/redeemPoints/setRedeemPoints: loyalty redemption, shown
 // when the customer has points and loyalty is on.
-export default function BillItemsCard({ items, removeItem, discount, setDiscount, discountType, setDiscountType, canDiscount, sub, disc, total, autoDiscount, onNote, points, pointValue, redeemPoints, setRedeemPoints }) {
+// serviceCharge/setServiceCharge (+ type): per-bill service charge in ₹ or %,
+// shown when the caller passes the setters.
+export default function BillItemsCard({ items, removeItem, discount, setDiscount, discountType, setDiscountType, canDiscount, sub, disc, total, autoDiscount, onNote, points, pointValue, redeemPoints, setRedeemPoints, serviceCharge, setServiceCharge, serviceChargeType, setServiceChargeType, serviceChargeOn }) {
+  const foodSub = items.filter(i => i.cat === 'food').reduce((a, i) => a + i.amount, 0);
   if (!items.length) {
     return <div className="empty"><b>Bill khaali hai</b>Upar se play, food ya socks add kijiye.</div>;
   }
@@ -43,6 +46,20 @@ export default function BillItemsCard({ items, removeItem, discount, setDiscount
         </div>
       )}
 
+      {setServiceCharge && (
+        <div className="row" style={{ marginTop: 14, alignItems: 'flex-end' }}>
+          <label className="f" style={{ margin: 0, flex: '1 1 120px' }}><span>Service charge{serviceChargeType === 'pct' ? (serviceChargeOn === 'all' ? ' (poore bill par)' : ' (sirf food par)') : ''}</span>
+            <input type="number" min="0" value={serviceCharge || ''} placeholder="0" onChange={e => setServiceCharge(Number(e.target.value) || 0)} />
+          </label>
+          <div style={{ flex: '0 0 130px' }}>
+            <div className="seg">
+              <button aria-pressed={serviceChargeType === 'amt'} onClick={() => setServiceChargeType('amt')}>₹</button>
+              <button aria-pressed={serviceChargeType === 'pct'} onClick={() => setServiceChargeType('pct')}>%</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {setRedeemPoints && points > 0 && (
         <label style={{ display: 'flex', gap: 9, alignItems: 'center', marginTop: 14, fontSize: 14 }}>
           <input type="checkbox" checked={redeemPoints > 0} onChange={e => setRedeemPoints(e.target.checked ? points : 0)} style={{ width: 18, height: 18 }} />
@@ -63,10 +80,13 @@ export default function BillItemsCard({ items, removeItem, discount, setDiscount
           <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--mint)' }}><span>Loyalty points</span><b className="num">− {INR(autoDiscount.pointsDiscount)}</b></div>
         )}
         {autoDiscount && autoDiscount.cgst > 0 && (
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="hint">CGST</span><b className="num">{INR(autoDiscount.cgst)}</b></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="hint">CGST (sirf food {INR(foodSub)} par)</span><b className="num">{INR(autoDiscount.cgst)}</b></div>
         )}
         {autoDiscount && autoDiscount.sgst > 0 && (
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="hint">SGST</span><b className="num">{INR(autoDiscount.sgst)}</b></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="hint">SGST (sirf food {INR(foodSub)} par)</span><b className="num">{INR(autoDiscount.sgst)}</b></div>
+        )}
+        {autoDiscount && autoDiscount.serviceCharge > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="hint">Service charge{serviceChargeType === 'pct' && serviceCharge ? ` ${serviceCharge}%` : ''}</span><b className="num">{INR(autoDiscount.serviceCharge)}</b></div>
         )}
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 17 }}><b>Total</b><b className="num">{INR(total)}</b></div>
       </div>

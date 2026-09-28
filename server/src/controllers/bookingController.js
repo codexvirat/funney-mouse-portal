@@ -3,6 +3,7 @@ const Booking = require('../models/Booking');
 const TableOrder = require('../models/TableOrder');
 const Config = require('../models/Config');
 const { audit } = require('../utils/audit');
+const { dstr } = require('../utils/date');
 
 exports.listBookings = asyncHandler(async (req, res) => {
   const { status } = req.query;
@@ -114,4 +115,27 @@ exports.assignTables = asyncHandler(async (req, res) => {
   booking.usedTableId = picked[0].id;
   await booking.save();
   res.status(201).json({ booking, orders: created });
+});
+
+// Everything about advance money in one place, for the admin Day-end and
+// owner reports screens: token advances on future bookings not yet used,
+// advances sitting on currently open tables, and advances taken in the
+// selected period (bookings created from..to).
+exports.advanceSummary = asyncHandler(async (req, res) => {
+  const { from, to } = req.query;
+  const [pending, tables, recent] = await Promise.all([
+    Booking.find({ status: 'pending', advance: { $gt: 0 } }).sort('eventDate'),
+    TableOrder.find({ advance: { $gt: 0 } }).sort('openedAt'),
+    from && to ? Booking.find({ advance: { $gt: 0 }, status: { $ne: 'cancelled' } }) : []
+  ]);
+  const received = recent.filter(b => {
+    const d = dstr(new Date(b.createdAt));
+    return d >= from && d <= to;
+  });
+  const sum = list => list.reduce((a, x) => a + (x.advance || 0), 0);
+  res.json({
+    pending: { total: sum(pending), list: pending.map(b => ({ _id: b._id, name: b.name, phone: b.phone, eventDate: b.eventDate, guests: b.guests, advance: b.advance, advanceMode: b.advanceMode })) },
+    openTables: { total: sum(tables), list: tables.map(o => ({ _id: o._id, tableName: o.tableName, name: o.name, advance: o.advance, advanceMode: o.advanceMode })) },
+    received: { total: sum(received), count: received.length }
+  });
 });

@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { billSubtotal, billDiscount, billTotalWithAuto, kidsOnBill } from '../utils/bill';
 import { uid } from '../utils/uid';
-import { useAutoDiscount } from '../hooks/useAutoDiscount';
+import { useAutoDiscount, previewTotal } from '../hooks/useAutoDiscount';
 import CustomerBox from '../components/CustomerBox';
 import PlayPanel from '../components/PlayPanel';
 import FoodPanel from '../components/FoodPanel';
@@ -16,6 +16,7 @@ import SessionsCard from '../components/SessionsCard';
 import PayBar from '../components/PayBar';
 import PaymentSheet from '../components/PaymentSheet';
 import ReceiptSheet from '../components/ReceiptSheet';
+import SplitSheet from '../components/SplitSheet';
 
 const CATS = [
   { key: 'play', label: 'Play area' },
@@ -37,6 +38,15 @@ export default function BillPage({ billIntent, onConsumeIntent }) {
   const [discount, setDiscount] = useState(0);
   const [discountType, setDiscountType] = useState('amt');
   const [redeemPoints, setRedeemPoints] = useState(0);
+  const [serviceCharge, setServiceCharge] = useState(0);
+  const [serviceChargeType, setServiceChargeType] = useState('pct');
+  const resetService = () => {
+    setServiceCharge((config && Number(config.serviceChargeDefault)) || 0);
+    setServiceChargeType((config && config.serviceChargeType) || 'pct');
+  };
+  // Pre-fill Setup's default service charge once settings have loaded.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(resetService, [config && config.serviceChargeDefault, config && config.serviceChargeType]);
 
   const [cat, setCat] = useState('play');
   const [useMember, setUseMember] = useState(false);
@@ -45,7 +55,8 @@ export default function BillPage({ billIntent, onConsumeIntent }) {
   const [playCustom, setPlayCustom] = useState(0);
   const [sockQty, setSockQty] = useState(1);
 
-  const [sheet, setSheet] = useState(null); // 'pay' | 'receipt' | null
+  const [sheet, setSheet] = useState(null); // 'pay' | 'receipt' | 'split' | 'splitpay' | null
+  const [split, setSplit] = useState(null); // { picked, phone, name, total }
   const [lastBill, setLastBill] = useState(null);
   const [lastCust, setLastCust] = useState(null);
 
@@ -100,12 +111,14 @@ export default function BillPage({ billIntent, onConsumeIntent }) {
 
   const sub = billSubtotal(items);
   const disc = billDiscount(items, discount, discountType);
-  const autoDiscount = useAutoDiscount((cust && cust.phone) || phone, items, { discount, discountType, redeemPoints });
+  const autoDiscount = useAutoDiscount((cust && cust.phone) || phone, items, { discount, discountType, redeemPoints, serviceCharge, serviceChargeType });
+  // A split bill keeps a % service charge; a flat ₹ one stays on the main bill.
+  const splitService = { serviceCharge: serviceChargeType === 'pct' ? serviceCharge : 0, serviceChargeType };
   const total = billTotalWithAuto(items, discount, discountType, autoDiscount);
   const kids = kidsOnBill(items);
 
   const resetAfterSave = () => {
-    setItems([]); setDiscount(0); setRedeemPoints(0); setUseMember(false); setPlayKids(1); setPlayCustom(0);
+    setItems([]); setDiscount(0); setRedeemPoints(0); setUseMember(false); setPlayKids(1); setPlayCustom(0); resetService();
     setCust(null); setIsNew(false); setPhone('');
   };
 
@@ -115,10 +128,40 @@ export default function BillPage({ billIntent, onConsumeIntent }) {
       name: (cust && cust.name) || 'Walk-in',
       items: items.map(({ id, ...rest }) => rest),
       kid: (cust && cust.kid) || '', kidDob: (cust && cust.kidDob) || '', anniversary: (cust && cust.anniversary) || '',
-      discount, discountType, pay, redeemPoints
+      discount, discountType, pay, redeemPoints, serviceCharge, serviceChargeType
     });
     setLastBill(data.bill); setLastCust(data.customer);
     resetAfterSave();
+    setSheet('receipt');
+  };
+
+  // Separate bill for just the picked lines (play vs food, or one guest's
+  // items); whatever wasn't picked stays in the cart for the next bill.
+  const startSplitPay = async ({ picked, phone: sPhone, name: sName }) => {
+    try {
+      const t = await previewTotal(sPhone, picked, splitService);
+      setSplit({ picked, phone: sPhone, name: sName, total: t });
+      setSheet('splitpay');
+    } catch (e) {
+      toast('Total nahi nikal paya — dobara try karein');
+    }
+  };
+
+  const onSaveSplit = async (pay) => {
+    const { data } = await api.post('/bills', {
+      phone: split.phone, name: split.name || 'Walk-in',
+      items: split.picked.map(({ id, ...rest }) => rest),
+      discount: 0, discountType: 'amt', pay, redeemPoints: 0, ...splitService
+    });
+    const left = items.map(i => {
+      const p = split.picked.find(x => x.id === i.id);
+      if (!p) return i;
+      const q = i.qty - p.qty;
+      return q > 0 ? { ...i, qty: q, amount: q * i.rate } : null;
+    }).filter(Boolean);
+    if (left.length) setItems(left); else resetAfterSave();
+    setLastBill(data.bill); setLastCust(data.customer);
+    setSplit(null);
     setSheet('receipt');
   };
 
@@ -169,13 +212,18 @@ export default function BillPage({ billIntent, onConsumeIntent }) {
             canDiscount={isAdmin || config.staffDiscount !== false}
             sub={sub} disc={disc} total={total} autoDiscount={autoDiscount}
             points={config.loyalty && config.loyalty.enabled && cust && !isNew ? cust.points || 0 : 0} pointValue={config.loyalty && config.loyalty.pointValue}
-            redeemPoints={redeemPoints} setRedeemPoints={setRedeemPoints} />
+            redeemPoints={redeemPoints} setRedeemPoints={setRedeemPoints}
+            serviceCharge={serviceCharge} setServiceCharge={setServiceCharge}
+            serviceChargeType={serviceChargeType} setServiceChargeType={setServiceChargeType} serviceChargeOn={config.serviceChargeOn} />
         </div>
       </div>
 
-      <PayBar itemsCount={items.length} kids={kids} total={total} onClear={clearBill} onPay={() => setSheet('pay')} />
+      <PayBar itemsCount={items.length} kids={kids} total={total} onClear={clearBill} onPay={() => setSheet('pay')} onSplit={() => setSheet('split')} />
 
       <PaymentSheet open={sheet === 'pay'} total={total} onClose={() => setSheet(null)} onSave={onSaveBill} />
+      <SplitSheet open={sheet === 'split'} items={items} onClose={() => setSheet(null)} onNext={startSplitPay} />
+      <PaymentSheet open={sheet === 'splitpay'} total={split ? split.total : 0} onClose={() => setSheet('split')} onSave={onSaveSplit}
+        initialNote={split ? `Alag bill: ${split.picked.map(i => i.name + (i.qty > 1 ? ' ×' + i.qty : '')).join(', ')}` : undefined} />
       <ReceiptSheet open={sheet === 'receipt'} bill={lastBill} customer={lastCust} config={config} onClose={() => setSheet(null)} />
     </>
   );

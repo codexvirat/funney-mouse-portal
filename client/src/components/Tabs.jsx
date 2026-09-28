@@ -13,8 +13,7 @@ const TABS = [
 
 export default function Tabs({ view, setView }) {
   const { isAdmin, user } = useAuth();
-  // Captains only work the tables screen.
-  const tabs = isAdmin ? TABS : TABS.filter(t => !t.admin && (user.role !== 'captain' || t.key === 'tables'));
+  const tabs = isAdmin ? TABS : TABS.filter(t => !t.admin);
   return (
     <nav className="tabs" aria-label="Sections">
       <div className="wrap">

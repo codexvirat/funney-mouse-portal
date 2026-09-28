@@ -12,7 +12,7 @@ function itemKey(i) {
 
 function pendingKot(order) {
   const ordered = new Map();
-  (order.items || []).forEach(i => {
+  [...(order.items || []), ...(order.paidItems || [])].forEach(i => {
     if (i.cat !== 'food' || (i.meta && i.meta.kotSent)) return;
     const k = itemKey(i);
     const cur = ordered.get(k) || { key: k, name: i.name, note: itemNote(i), qty: 0 };

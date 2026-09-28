@@ -7,8 +7,8 @@ import { exportCSV } from '../utils/csv';
 import ReportBreakdown from '../components/ReportBreakdown';
 import TableBreakdown from '../components/TableBreakdown';
 import EditBillSheet from '../components/EditBillSheet';
-import WaiterBreakdown from '../components/WaiterBreakdown';
 import ProfitCard from '../components/ProfitCard';
+import AdvanceCard from '../components/AdvanceCard';
 
 function DayReport({ date, bills, t, expenses, onVoid, onSettle, onEdit }) {
   return (
@@ -18,9 +18,9 @@ function DayReport({ date, bills, t, expenses, onVoid, onSettle, onEdit }) {
           <span>Avg {INR(t.bills ? t.total / t.bills : 0)}</span>{t.disc > 0 && <span>Disc {INR(t.disc)}</span>}</div>
       </div>
       <ReportBreakdown t={t} />
+      <AdvanceCard api={api} from={date} to={date} adjusted={t.advance} />
       <ProfitCard t={t} expenses={expenses} />
       <TableBreakdown bills={bills} />
-      <WaiterBreakdown bills={bills} />
       <div className="card">
         <div className="hd"><h2>Bills</h2><div className="spacer"></div>
           <button className="btn sm" onClick={() => exportCSV(bills, date)}>Export CSV</button></div>
@@ -33,6 +33,8 @@ function DayReport({ date, bills, t, expenses, onVoid, onSettle, onEdit }) {
                   <tr key={b._id} className={b.void ? 'void' : ''}>
                     <td>{b.no}</td><td>{tstr(b.ts)}</td>
                     <td>{b.name || 'Walk-in'}{b.phone ? <><br /><span className="hint">{b.phone}</span></> : null}
+                      {b.advance > 0 && <><br /><span className="hint">Advance {INR(b.advance)}</span></>}
+                      {b.tableName ? <><br /><span className="hint">{b.tableName}</span></> : null}
                       {b.editedAt && <><br /><span className="hint">Edited</span></>}</td>
                     <td>{b.items.map((i, ix) => (<span key={ix}>{i.name}{i.qty > 1 ? ' ×' + i.qty : ''}<br /></span>))}</td>
                     <td style={{ textAlign: 'right' }}><b className="num">{INR(b.total)}</b></td>
@@ -70,9 +72,9 @@ function MonthReport({ month, bills, t, expenses }) {
           <span>Avg/day {INR(keys.length ? t.total / keys.length : 0)}</span></div>
       </div>
       <ReportBreakdown t={t} />
+      <AdvanceCard api={api} from={month + '-01'} to={month + '-31'} adjusted={t.advance} />
       <ProfitCard t={t} expenses={expenses} />
       <TableBreakdown bills={bills} />
-      <WaiterBreakdown bills={bills} />
       <div className="card">
         <div className="hd"><h2>Day by day</h2><div className="spacer"></div>
           <button className="btn sm" onClick={() => exportCSV(bills, month)}>Export CSV</button></div>

@@ -68,7 +68,6 @@ async function printTableQRs(tables, shopName) {
 
 const ROLES = [
   { key: 'staff', label: 'Staff (counter)' },
-  { key: 'captain', label: 'Captain / waiter' },
   { key: 'kitchen', label: 'Kitchen (KOT)' },
   { key: 'admin', label: 'Admin' },
   { key: 'owner', label: 'Owner (reports PIN)' }
@@ -138,7 +137,6 @@ function UsersCard() {
       <p className="hint" style={{ margin: '0 0 14px' }}>
         Role "Owner" sirf reports dekh sakta hai (Day end — void/settle nahi) aur alag se <b>{window.location.origin}/owner</b> par PIN se login karta hai, poora staff/admin login flow use nahi karna padta.
         Role "Kitchen" normal login page se login karta hai aur sirf table-wise KOT screen dekhta hai — naye food orders aur unka print.
-        Role "Captain" (waiter) apne phone se login karke table khol sakta hai, order le sakta hai, KOT bhej sakta hai — aur kitchen "Ready" kare to usko notification aata hai. Bill aur cancel staff/admin hi karenge. User ka "Name" wahi rakhein jo table par Waiter me likha jayega.
       </p>
       {loading ? <p className="hint">Loading…</p> : (
         <div className="scrollx">
@@ -225,6 +223,22 @@ export default function SetupPage() {
         </div>
       </div></div>
 
+      <div className="card"><div className="hd"><h2>Bill / receipt details</h2></div><div className="bd">
+        <div className="grid2">
+          <label className="f"><span>Company / legal name</span>
+            <input type="text" placeholder="e.g. Funny Mouse Pvt. Ltd." value={form.legalName || ''} onChange={e => setField('legalName', e.target.value)} /></label>
+          <label className="f"><span>GSTIN</span>
+            <input type="text" value={form.gstin || ''} onChange={e => setField('gstin', e.target.value.toUpperCase())} /></label>
+          <label className="f"><span>Address</span>
+            <textarea rows="2" value={form.shopAddress || ''} onChange={e => setField('shopAddress', e.target.value)} /></label>
+          <label className="f"><span>Phone</span>
+            <input type="text" value={form.shopPhone || ''} onChange={e => setField('shopPhone', e.target.value)} /></label>
+          <label className="f"><span>Bill ke neeche message</span>
+            <textarea rows="2" value={form.receiptFooter == null ? 'Thank you\nVisit Again!' : form.receiptFooter} onChange={e => setField('receiptFooter', e.target.value)} /></label>
+        </div>
+        <p className="hint" style={{ margin: '6px 0 0' }}>Ye sab printed bill ke upar shop name ke neeche aayega. Khaali chhodenge to wo line print nahi hogi.</p>
+      </div></div>
+
       <div className="card"><div className="hd"><h2>Food GST</h2></div><div className="bd">
         <div className="row">
           <label className="f" style={{ margin: 0, flex: '1 1 140px' }}><span>CGST %</span>
@@ -233,6 +247,25 @@ export default function SetupPage() {
             <input type="number" min="0" max="100" step="0.1" value={form.sgstPercent || 0} onChange={e => setField('sgstPercent', Number(e.target.value) || 0)} /></label>
         </div>
         <p className="hint" style={{ margin: '10px 0 0' }}>Sirf Food items ke subtotal par lagta hai — Play/Socks/Membership tax-free rahenge. Receipt aur reports dono me CGST/SGST alag line me dikhega.</p>
+      </div></div>
+
+      <div className="card"><div className="hd"><h2>Service charge</h2></div><div className="bd">
+        <div className="row" style={{ alignItems: 'flex-end' }}>
+          <label className="f" style={{ margin: 0, flex: '1 1 140px' }}><span>Default service charge (0 = band)</span>
+            <input type="number" min="0" step="0.5" value={form.serviceChargeDefault || ''} placeholder="0" onChange={e => setField('serviceChargeDefault', Number(e.target.value) || 0)} /></label>
+          <div style={{ flex: '0 0 130px' }}>
+            <div className="seg">
+              <button aria-pressed={form.serviceChargeType === 'amt'} onClick={() => setField('serviceChargeType', 'amt')}>₹</button>
+              <button aria-pressed={form.serviceChargeType !== 'amt'} onClick={() => setField('serviceChargeType', 'pct')}>%</button>
+            </div>
+          </div>
+        </div>
+        <span className="hint" style={{ display: 'block', margin: '12px 0 6px' }}>% kis par lage?</span>
+        <div className="seg">
+          <button aria-pressed={form.serviceChargeOn !== 'all'} onClick={() => setField('serviceChargeOn', 'food')}>Sirf food</button>
+          <button aria-pressed={form.serviceChargeOn === 'all'} onClick={() => setField('serviceChargeOn', 'all')}>Poora bill (play bhi)</button>
+        </div>
+        <p className="hint" style={{ margin: '10px 0 0' }}>Har naye bill me ye apne aap bhar jayega — billing ke waqt ₹ ya % me badal ya 0 kar sakte hain. Service charge par GST nahi lagta.</p>
       </div></div>
 
       <div className="card"><div className="hd"><h2>Happy hour</h2></div><div className="bd">

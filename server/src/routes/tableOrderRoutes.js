@@ -3,12 +3,10 @@ const { protect, allowRoles } = require('../middleware/auth');
 const ctrl = require('../controllers/tableOrderController');
 const { notifyOnWrite } = require('../utils/events');
 
-// Kitchen can only see tables and handle KOTs. Captains (waiters) run
-// their tables — open, order, KOT, serve — but billing, cancelling and
-// merging stay with staff/admin.
+// Kitchen can only see tables and handle KOTs; everything else is staff/admin.
 const floor = allowRoles('admin', 'staff');
-const service = allowRoles('admin', 'staff', 'captain');
-const anyone = allowRoles('admin', 'staff', 'kitchen', 'captain');
+const service = floor;
+const anyone = allowRoles('admin', 'staff', 'kitchen');
 
 router.use(notifyOnWrite('tables'));
 
@@ -22,8 +20,11 @@ router.patch('/:id', protect, service, ctrl.updateTableOrder);
 router.delete('/:id', protect, floor, ctrl.cancelTableOrder);
 router.post('/:id/play/start', protect, service, ctrl.startPlay);
 router.post('/:id/play/end', protect, service, ctrl.endPlay);
+router.post('/:id/play/pause', protect, service, ctrl.pausePlay);
+router.post('/:id/play/resume', protect, service, ctrl.resumePlay);
 router.post('/:id/transfer', protect, service, ctrl.transferTable);
 router.post('/:id/merge', protect, floor, ctrl.mergeTable);
 router.post('/:id/checkout', protect, floor, ctrl.checkoutTable);
+router.post('/:id/checkout-part', protect, floor, ctrl.checkoutPart);
 
 module.exports = router;

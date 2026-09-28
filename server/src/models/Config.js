@@ -26,6 +26,12 @@ const happyHourSchema = new mongoose.Schema({
 // Single settings document for the whole shop.
 const configSchema = new mongoose.Schema({
   shopName: { type: String, default: 'Funny Mouse' },
+  // Printed under the shop name on the bill (company, GSTIN, address…).
+  legalName: { type: String, default: '' },
+  gstin: { type: String, default: '' },
+  shopAddress: { type: String, default: '' },
+  shopPhone: { type: String, default: '' },
+  receiptFooter: { type: String, default: 'Thank you\nVisit Again!' },
   staffDiscount: { type: Boolean, default: true },
   playSlabs: { type: [slabSchema], default: [] },
   extraHalfHour: { type: Number, default: 150 },
@@ -39,6 +45,11 @@ const configSchema = new mongoose.Schema({
   happyHour: { type: happyHourSchema, default: () => ({}) },
   cgstPercent: { type: Number, default: 2.5 },
   sgstPercent: { type: Number, default: 2.5 },
+  // Service charge pre-filled on every new bill (staff can change it per
+  // bill). Type 'pct' or 'amt'; a % is taken on food only or the whole bill.
+  serviceChargeDefault: { type: Number, default: 0 },
+  serviceChargeType: { type: String, enum: ['pct', 'amt'], default: 'pct' },
+  serviceChargeOn: { type: String, enum: ['food', 'all'], default: 'food' },
   loyalty: { type: loyaltySchema, default: () => ({}) },
   qrOrdering: { type: Boolean, default: true }
 }, { timestamps: true });

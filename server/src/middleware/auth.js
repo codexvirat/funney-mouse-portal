@@ -17,7 +17,8 @@ const protect = asyncHandler(async (req, res, next) => {
     throw new Error('Not authorized, token invalid');
   }
   const user = await User.findById(decoded.id).select('-passwordHash');
-  if (!user || !user.active) {
+  // 'captain' (waiter) logins were removed — reject any old session.
+  if (!user || !user.active || user.role === 'captain') {
     res.status(401);
     throw new Error('Not authorized');
   }

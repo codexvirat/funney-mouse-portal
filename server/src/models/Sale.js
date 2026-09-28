@@ -34,7 +34,9 @@ const saleSchema = new mongoose.Schema({
   happyHourDiscount: { type: Number, default: 0 },
   cgst: { type: Number, default: 0 },
   sgst: { type: Number, default: 0 },
-  waiterName: { type: String, default: '' },
+  serviceCharge: { type: Number, default: 0 },
+  // The % typed for the service charge (0 when it was a flat ₹ amount).
+  serviceChargePct: { type: Number, default: 0 },
   advance: { type: Number, default: 0 },
   advanceMode: { type: String, default: '' },
   durationMins: { type: Number, default: 0 },

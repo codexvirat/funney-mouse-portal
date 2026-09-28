@@ -22,7 +22,11 @@ export default function PaymentSheet({ open, total, onClose, onSave, initialPay,
   }, [open]);
 
   const paid = pay.UPI + pay.CASH + pay.CARD + pay.DUE;
-  const left = total - paid;
+  const left = Math.round((total - paid) * 100) / 100;
+
+  // Part payment (e.g. ₹500 cash + rest UPI): type one mode's amount, then
+  // tap another tile and it takes whatever is left.
+  const setAmt = (k, v) => setPay(p => ({ ...p, [k]: Math.max(0, Number(v) || 0) }));
 
   const tap = (k) => {
     const l = total - (pay.UPI + pay.CASH + pay.CARD + pay.DUE);
@@ -55,6 +59,14 @@ export default function PaymentSheet({ open, total, onClose, onSave, initialPay,
           <button key={m.key} className={`pt ${m.cls} ${pay[m.key] > 0 ? 'on' : ''}`} onClick={() => tap(m.key)}>
             <b>{m.label}</b><span>{pay[m.key] > 0 ? INR(pay[m.key]) : 'Tap for ' + INR(Math.max(0, left))}</span>
           </button>
+        ))}
+      </div>
+      <p className="hint" style={{ margin: '14px 0 6px' }}>Part payment? (Cash + UPI) — ek mode ka amount likhein, phir doosre tile pe tap karein, baaki usme chala jayega.</p>
+      <div className="payamts">
+        {MODES.map(m => (
+          <label className="f" key={m.key} style={{ margin: 0 }}><span>{m.label}</span>
+            <input type="number" min="0" inputMode="decimal" placeholder="0" value={pay[m.key] || ''} onChange={e => setAmt(m.key, e.target.value)} />
+          </label>
         ))}
       </div>
       <div className="row" style={{ marginTop: 12 }}>

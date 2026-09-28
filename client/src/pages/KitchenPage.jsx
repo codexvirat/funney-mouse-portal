@@ -169,7 +169,7 @@ export default function KitchenPage() {
             <div className="hd">
               <h2>{o.tableName}</h2>
               <span className="hint">
-                {' '}· {o.adults + o.kids} guests{o.waiterName ? ' · ' + o.waiterName : ''} · {tstr(o.openedAt)}
+                {' '}· {o.adults + o.kids} guests · {tstr(o.openedAt)}
               </span>
               <div className="spacer"></div>
               <button className="btn sm dark" disabled={!pending.length || busyId === o._id} onClick={() => printOne(o)}>

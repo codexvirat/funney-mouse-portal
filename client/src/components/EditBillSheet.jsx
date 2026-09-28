@@ -24,6 +24,8 @@ export default function EditBillSheet({ open, bill, onClose, onSaved }) {
   const [cat, setCat] = useState('food');
   const [sockQty, setSockQty] = useState(1);
   const [paySheet, setPaySheet] = useState(false);
+  const [serviceCharge, setServiceCharge] = useState(0);
+  const [serviceChargeType, setServiceChargeType] = useState('pct');
 
   useEffect(() => {
     if (open && bill) {
@@ -32,6 +34,8 @@ export default function EditBillSheet({ open, bill, onClose, onSaved }) {
       // portion so re-saving without touching it doesn't drop it.
       setDiscount(Math.max(0, (bill.discount || 0) - (bill.memberDiscount || 0) - (bill.happyHourDiscount || 0)));
       setDiscountType('amt');
+      setServiceCharge(bill.serviceChargePct || bill.serviceCharge || 0);
+      setServiceChargeType(bill.serviceChargePct ? 'pct' : 'amt');
       setCat('food');
       setPaySheet(false);
     }
@@ -49,12 +53,15 @@ export default function EditBillSheet({ open, bill, onClose, onSaved }) {
   const foodSubtotal = items.filter(i => i.cat === 'food').reduce((a, i) => a + i.amount, 0);
   const cgst = Math.round(foodSubtotal * (Number(config.cgstPercent) || 0) / 100);
   const sgst = Math.round(foodSubtotal * (Number(config.sgstPercent) || 0) / 100);
-  const autoDiscount = { memberDiscount: bill.memberDiscount || 0, happyHourDiscount: bill.happyHourDiscount || 0, cgst, sgst };
+  // Mirrors billController.computeService.
+  const serviceBase = config.serviceChargeOn === 'all' ? sub : foodSubtotal;
+  const serviceAmt = serviceChargeType === 'pct' ? Math.round(serviceBase * (serviceCharge || 0) / 100) : Math.round(serviceCharge || 0);
+  const autoDiscount = { memberDiscount: bill.memberDiscount || 0, happyHourDiscount: bill.happyHourDiscount || 0, cgst, sgst, serviceCharge: serviceAmt };
   const total = billTotalWithAuto(items, discount, discountType, autoDiscount);
 
   const save = async (pay) => {
     const { data } = await api.patch(`/bills/${bill._id}/edit`, {
-      items: items.map(({ id, ...rest }) => rest), discount, discountType, pay
+      items: items.map(({ id, ...rest }) => rest), discount, discountType, pay, serviceCharge, serviceChargeType
     });
     toast('Bill update ho gaya');
     setPaySheet(false);
@@ -79,7 +86,9 @@ export default function EditBillSheet({ open, bill, onClose, onSaved }) {
             <BillItemsCard items={items} removeItem={removeItem}
               discount={discount} setDiscount={setDiscount}
               discountType={discountType} setDiscountType={setDiscountType}
-              canDiscount sub={sub} disc={disc} total={total} autoDiscount={autoDiscount} />
+              canDiscount sub={sub} disc={disc} total={total} autoDiscount={autoDiscount}
+              serviceCharge={serviceCharge} setServiceCharge={setServiceCharge}
+              serviceChargeType={serviceChargeType} setServiceChargeType={setServiceChargeType} serviceChargeOn={config.serviceChargeOn} />
           </div>
 
           <div className="row" style={{ marginTop: 14 }}>

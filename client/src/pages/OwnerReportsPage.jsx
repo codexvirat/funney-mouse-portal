@@ -6,47 +6,8 @@ import { rollup } from '../utils/report';
 import { exportCSV } from '../utils/csv';
 import ReportBreakdown from '../components/ReportBreakdown';
 import TableBreakdown from '../components/TableBreakdown';
-import WaiterBreakdown from '../components/WaiterBreakdown';
 import ProfitCard from '../components/ProfitCard';
-
-function PendingBookings({ api }) {
-  const [bookings, setBookings] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    api.get('/bookings', { params: { status: 'pending' } })
-      .then(({ data }) => { if (!cancelled) setBookings(data.bookings); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  if (loading || !bookings.length) return null;
-  const totalAdvance = bookings.reduce((a, b) => a + (b.advance || 0), 0);
-
-  return (
-    <div className="card">
-      <div className="hd"><h2>Advance / token bookings pending</h2><div className="spacer"></div>
-        <span className="hint">{bookings.length} · {INR(totalAdvance)} advance liya hua</span></div>
-      <div className="bd scrollx">
-        <table className="tb">
-          <thead><tr><th>Event date</th><th>Name</th><th>Guests</th><th style={{ textAlign: 'right' }}>Advance</th></tr></thead>
-          <tbody>
-            {bookings.map(b => (
-              <tr key={b._id}>
-                <td>{prettyDate(b.eventDate)}</td>
-                <td>{b.name || 'Walk-in'}{b.phone ? <><br /><span className="hint">{b.phone}</span></> : null}</td>
-                <td>{b.guests || '—'}</td>
-                <td style={{ textAlign: 'right' }}><b className="num">{INR(b.advance)}</b> <span className="hint">({b.advanceMode})</span></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
+import AdvanceCard from '../components/AdvanceCard';
 
 function heroSub(t, extra) {
   return (
@@ -69,7 +30,6 @@ function DayReport({ date, bills, t, expenses }) {
       <ReportBreakdown t={t} />
       <ProfitCard t={t} expenses={expenses} />
       <TableBreakdown bills={bills} />
-      <WaiterBreakdown bills={bills} />
       <div className="card">
         <div className="hd"><h2>Bills</h2><div className="spacer"></div>
           <button className="btn sm" onClick={() => exportCSV(bills, date)}>Export CSV</button></div>
@@ -113,7 +73,6 @@ function RangeReport({ label, bills, t, filename, expenses }) {
       <ReportBreakdown t={t} />
       <ProfitCard t={t} expenses={expenses} />
       <TableBreakdown bills={bills} />
-      <WaiterBreakdown bills={bills} />
       <div className="card">
         <div className="hd"><h2>Day by day</h2><div className="spacer"></div>
           <button className="btn sm" onClick={() => exportCSV(bills, filename)}>Export CSV</button></div>
@@ -156,17 +115,18 @@ export default function OwnerReportsPage() {
   const quarterTo = dstr();
   const quarterFrom = addMonths(quarterTo, -3);
 
+  let params;
+  if (mode === 'day') params = { date };
+  else if (mode === 'month') params = { month };
+  else if (mode === 'week') params = { from: wk.from, to: wk.to };
+  else if (mode === 'quarter') params = { from: quarterFrom, to: quarterTo };
+  else if (mode === 'year') params = { from: year + '-01-01', to: year + '-12-31' };
+  else params = { from: rangeFrom, to: rangeTo };
+  const range = params.date ? { from: params.date, to: params.date } : params.month ? { from: params.month + '-01', to: params.month + '-31' } : params;
+
   const load = async () => {
     setLoading(true);
     try {
-      let params;
-      if (mode === 'day') params = { date };
-      else if (mode === 'month') params = { month };
-      else if (mode === 'week') params = { from: wk.from, to: wk.to };
-      else if (mode === 'quarter') params = { from: quarterFrom, to: quarterTo };
-      else if (mode === 'year') params = { from: year + '-01-01', to: year + '-12-31' };
-      else params = { from: rangeFrom, to: rangeTo };
-      const range = params.date ? { from: params.date, to: params.date } : params.month ? { from: params.month + '-01', to: params.month + '-31' } : params;
       const [billsRes, expRes] = await Promise.all([
         api.get('/bills', { params }),
         api.get('/cash/expenses', { params: range }).catch(() => null)
@@ -200,8 +160,6 @@ export default function OwnerReportsPage() {
 
   return (
     <>
-      <PendingBookings api={api} />
-
       <div className="card"><div className="bd">
         <div className="seg" style={{ marginBottom: 12, flexWrap: 'wrap' }}>
           {MODES.map(m => (
@@ -240,6 +198,7 @@ export default function OwnerReportsPage() {
         )}
       </div></div>
 
+      {!loading && <AdvanceCard api={api} from={range.from} to={range.to} adjusted={t.advance} />}
       {loading ? <p className="hint">Loading…</p> : report}
     </>
   );

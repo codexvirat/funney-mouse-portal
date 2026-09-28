@@ -47,15 +47,19 @@ const tableOrderSchema = new mongoose.Schema({
   playKids: { type: Number, default: 0 },
   playMember: { type: Boolean, default: false },
   playPlannedMins: { type: Number, default: 0 },
+  playPausedAt: { type: String, default: null },
+  playPausedMs: { type: Number, default: 0 },
   reserved: { type: Boolean, default: false },
   reservedNote: { type: String, default: '' },
-  waiterName: { type: String, default: '' },
-  // Username of the captain login serving this table — gets the "food ready" alert.
-  waiterUser: { type: String, default: '' },
   advance: { type: Number, default: 0 },
   advanceMode: { type: String, default: '' },
   kots: { type: [kotSchema], default: [] },
   requests: { type: [requestSchema], default: [] },
+  // Lines already billed through a split / separate bill while the table stays
+  // open. Kept so KOT pending math (items + paidItems − sent) stays correct.
+  paidItems: { type: [itemSchema], default: [] },
+  // Bill numbers already generated from this table via split billing.
+  paidBills: { type: [new mongoose.Schema({ id: String, no: Number, total: Number, name: String }, { _id: false })], default: [] },
   bookingId: { type: String, default: '' },
   openedAt: { type: String, required: true },
   openedBy: { type: String, default: '' }

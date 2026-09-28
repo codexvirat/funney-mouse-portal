@@ -19,7 +19,8 @@ export function billTotal(items, discount, discountType) {
 export function billTotalWithAuto(items, discount, discountType, autoDiscount) {
   const auto = (autoDiscount && ((autoDiscount.memberDiscount || 0) + (autoDiscount.happyHourDiscount || 0) + (autoDiscount.pointsDiscount || 0))) || 0;
   const gst = (autoDiscount && ((autoDiscount.cgst || 0) + (autoDiscount.sgst || 0))) || 0;
-  return Math.max(0, billTotal(items, discount, discountType) - auto) + gst;
+  const service = (autoDiscount && autoDiscount.serviceCharge) || 0;
+  return Math.max(0, billTotal(items, discount, discountType) - auto) + gst + service;
 }
 
 export function kidsOnBill(items) {
@@ -36,4 +37,12 @@ export function priceForMinutes(cfg, mins) {
   for (const s of sl) if (mins <= s.minutes) return s.price;
   const last = sl[sl.length - 1];
   return last.price + Math.ceil((mins - last.minutes) / 30) * (Number(cfg.extraHalfHour) || 0);
+}
+
+// Minutes actually played: time since start minus finished pauses, frozen
+// while paused. Mirrors server/src/utils/pricing.js playElapsedMins.
+export function playElapsedMins(start, pausedMs, pausedAt) {
+  if (!start) return 0;
+  const end = pausedAt ? new Date(pausedAt).getTime() : Date.now();
+  return Math.max(0, Math.round((end - new Date(start).getTime() - (Number(pausedMs) || 0)) / 60000));
 }

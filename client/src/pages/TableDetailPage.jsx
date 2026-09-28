@@ -5,12 +5,12 @@ import { useToast } from '../context/ToastContext';
 import { billSubtotal, billDiscount, billTotalWithAuto, kidsOnBill } from '../utils/bill';
 import { uid } from '../utils/uid';
 import { memberActive } from '../utils/member';
-import { useAutoDiscount } from '../hooks/useAutoDiscount';
+import { useAutoDiscount, previewTotal } from '../hooks/useAutoDiscount';
 import { INR } from '../utils/money';
 import { pendingKot, printKotSlip } from '../utils/kot';
 import { playAlert } from '../utils/notify';
 import { tstr } from '../utils/date';
-import { slabSorted } from '../utils/bill';
+import { slabSorted, playElapsedMins } from '../utils/bill';
 import CustomerBox from '../components/CustomerBox';
 import PlayPanel from '../components/PlayPanel';
 import FoodPanel from '../components/FoodPanel';
@@ -21,7 +21,7 @@ import PayBar from '../components/PayBar';
 import PaymentSheet from '../components/PaymentSheet';
 import ReceiptSheet from '../components/ReceiptSheet';
 import Sheet from '../components/Sheet';
-import WaiterInput, { useCaptains, captainFor } from '../components/WaiterInput';
+import SplitSheet from '../components/SplitSheet';
 
 const CATS = [
   { key: 'play', label: 'Play area' },
@@ -34,10 +34,7 @@ const CATS = [
 // TableOrder so it survives refresh/another device — unlike BillPage's
 // quick-bill flow, which only ever keeps one draft in local React state.
 export default function TableDetailPage({ order, config, freeTables, otherOrders, onSyncOrder, onBack, onClosed, onTransferred, onMerged }) {
-  const { isAdmin, user } = useAuth();
-  // Captains run the table but billing/cancel/merge stay with the counter.
-  const canBill = user.role !== 'captain';
-  const captains = useCaptains();
+  const { isAdmin } = useAuth();
   const toast = useToast();
 
   const [phone, setPhone] = useState(order.phone || '');
@@ -48,6 +45,8 @@ export default function TableDetailPage({ order, config, freeTables, otherOrders
   const [discount, setDiscount] = useState(0);
   const [discountType, setDiscountType] = useState('amt');
   const [redeemPoints, setRedeemPoints] = useState(0);
+  const [serviceCharge, setServiceCharge] = useState(Number(config.serviceChargeDefault) || 0);
+  const [serviceChargeType, setServiceChargeType] = useState(config.serviceChargeType || 'pct');
 
   const [cat, setCat] = useState('play');
   const [useMember, setUseMember] = useState(false);
@@ -58,9 +57,10 @@ export default function TableDetailPage({ order, config, freeTables, otherOrders
 
   const [adults, setAdults] = useState(order.adults || 0);
   const [kidCount, setKidCount] = useState(order.kids || 0);
-  const [waiterName, setWaiterName] = useState(order.waiterName || '');
 
-  const [sheet, setSheet] = useState(null); // 'pay' | 'receipt' | 'transfer' | 'merge' | null
+  const [sheet, setSheet] = useState(null); // 'pay' | 'receipt' | 'transfer' | 'merge' | 'split' | 'splitpay' | null
+  const [split, setSplit] = useState(null); // { picks, picked, phone, name, total }
+  const [tableClosed, setTableClosed] = useState(true);
   const [lastBill, setLastBill] = useState(null);
   const [lastCust, setLastCust] = useState(null);
   const [, setTick] = useState(0);
@@ -149,11 +149,12 @@ export default function TableDetailPage({ order, config, freeTables, otherOrders
 
   const bumpAdults = (d) => { const v = Math.max(0, adults + d); setAdults(v); persist({ adults: v }); };
   const bumpKids = (d) => { const v = Math.max(0, kidCount + d); setKidCount(v); persist({ kids: v }); };
-  const saveWaiter = () => persist({ waiterName, waiterUser: captainFor(waiterName, captains) });
 
   const sub = billSubtotal(items);
   const disc = billDiscount(items, discount, discountType);
-  const autoDiscount = useAutoDiscount((cust && cust.phone) || phone, items, { discount, discountType, redeemPoints });
+  const autoDiscount = useAutoDiscount((cust && cust.phone) || phone, items, { discount, discountType, redeemPoints, serviceCharge, serviceChargeType });
+  // A split bill keeps a % service charge; a flat ₹ one stays on the main bill.
+  const splitService = { serviceCharge: serviceChargeType === 'pct' ? serviceCharge : 0, serviceChargeType };
   const loyaltyOn = !!(config.loyalty && config.loyalty.enabled);
   useEffect(() => { setRedeemPoints(0); }, [cust && cust.phone]);
   const total = billTotalWithAuto(items, discount, discountType, autoDiscount);
@@ -162,7 +163,19 @@ export default function TableDetailPage({ order, config, freeTables, otherOrders
   const kotPending = pendingKot({ ...order, items }).reduce((a, i) => a + i.qty, 0);
 
   const playRunning = !!order.playStart;
-  const playMins = playRunning ? Math.max(0, Math.round((Date.now() - new Date(order.playStart).getTime()) / 60000)) : 0;
+  const playPaused = playRunning && !!order.playPausedAt;
+  const playMins = playRunning ? playElapsedMins(order.playStart, order.playPausedMs, order.playPausedAt) : 0;
+
+  // Kid stepped out mid-play — pause so the gap isn't charged, resume on return.
+  const togglePause = async () => {
+    try {
+      const { data } = await api.post(`/table-orders/${order._id}/play/${playPaused ? 'resume' : 'pause'}`);
+      onSyncOrder(data.order);
+      toast(playPaused ? 'Timer phir se chalu' : 'Timer pause ho gaya');
+    } catch (e) {
+      toast((e.response && e.response.data && e.response.data.message) || 'Timer update nahi hua');
+    }
+  };
 
   const startTimer = async () => {
     try {
@@ -240,7 +253,7 @@ export default function TableDetailPage({ order, config, freeTables, otherOrders
 
   const readyKots = (order.kots || []).filter(k => k.readyAt && !k.servedAt);
   const newRequests = (order.requests || []).filter(r => r.status === 'new');
-  const playWarn = playRunning ? playAlert(order.playStart, order.playPlannedMins) : null;
+  const playWarn = playRunning ? playAlert(order.playStart, order.playPlannedMins, order.playPausedMs, order.playPausedAt) : null;
 
   const startService = () => persist({ reserved: false });
 
@@ -275,12 +288,42 @@ export default function TableDetailPage({ order, config, freeTables, otherOrders
 
   const onSaveBill = async (pay) => {
     const { data } = await api.post(`/table-orders/${order._id}/checkout`, {
-      discount, discountType, pay, redeemPoints,
+      discount, discountType, pay, redeemPoints, serviceCharge, serviceChargeType,
       kid: (cust && cust.kid) || '', kidDob: (cust && cust.kidDob) || '', anniversary: (cust && cust.anniversary) || ''
     });
     setLastBill(data.bill); setLastCust(data.customer);
+    setTableClosed(true);
     setSheet('receipt');
   };
+
+  // Separate bill for only the picked lines (play vs food, or one guest of
+  // the group). Picks are sent by line index, so flush pending item saves
+  // first to make sure the server's list matches what's on screen.
+  const startSplitPay = async ({ picks, picked, phone: sPhone, name: sName }) => {
+    await saveChain.current.catch(() => {});
+    try {
+      const t = await previewTotal(sPhone, picked, splitService);
+      setSplit({ picks, picked, phone: sPhone, name: sName, total: t });
+      setSheet('splitpay');
+    } catch (e) {
+      toast('Total nahi nikal paya — dobara try karein');
+    }
+  };
+
+  const onSaveSplit = async (pay) => {
+    const { data } = await api.post(`/table-orders/${order._id}/checkout-part`, {
+      picks: split.picks, phone: split.phone, name: split.name, pay, discount: 0, discountType: 'amt', redeemPoints: 0, ...splitService
+    });
+    if (data.order) {
+      onSyncOrder(data.order);
+      setItems(data.order.items.map(i => ({ id: uid(), ...i })));
+    }
+    setTableClosed(!data.order);
+    setLastBill(data.bill); setLastCust(data.customer);
+    setSplit(null);
+    setSheet('receipt');
+  };
+  const splitAdvance = split && order.advance > 0 ? Math.min(order.advance, split.total) : 0;
 
   const cancelTable = async () => {
     if (!window.confirm(order.tableName + ' cancel kar dein? Koi bill nahi banega.')) return;
@@ -292,7 +335,7 @@ export default function TableDetailPage({ order, config, freeTables, otherOrders
     }
   };
 
-  const closeReceipt = () => { setSheet(null); onClosed(); };
+  const closeReceipt = () => { setSheet(null); if (tableClosed) onClosed(); };
 
   if (order.reserved) {
     return (
@@ -304,10 +347,10 @@ export default function TableDetailPage({ order, config, freeTables, otherOrders
         <div className="card"><div className="bd">
           <p><b>{order.name || 'Walk-in'}</b>{order.phone ? ' · ' + order.phone : ''}</p>
           {order.reservedNote && <p className="hint">{order.reservedNote}</p>}
-          <p className="hint">{order.adults} adults · {order.kids} kids{order.waiterName ? ' · Waiter: ' + order.waiterName : ''}</p>
+          <p className="hint">{order.adults} adults · {order.kids} kids</p>
           <div className="row" style={{ marginTop: 14 }}>
             <button className="btn primary" style={{ flex: '2 1 160px' }} onClick={startService}>Guest aa gaye — start service</button>
-            {canBill && <button className="btn danger" style={{ flex: '1 1 120px' }} onClick={cancelTable}>Cancel reservation</button>}
+            <button className="btn danger" style={{ flex: '1 1 120px' }} onClick={cancelTable}>Cancel reservation</button>
           </div>
         </div></div>
       </>
@@ -319,13 +362,13 @@ export default function TableDetailPage({ order, config, freeTables, otherOrders
       <div className="row" style={{ alignItems: 'center', marginBottom: 4, flexWrap: 'nowrap' }}>
         <button className="btn ghost sm" style={{ flex: '0 0 auto' }} onClick={onBack}>← Tables</button>
         <h2 style={{ margin: '0 0 0 4px', fontSize: 17, flex: 1, minWidth: 0 }}>{order.tableName}</h2>
-        {canBill && <button className="btn sm danger" style={{ flex: '0 0 auto' }} onClick={cancelTable}>Cancel table</button>}
+        <button className="btn sm danger" style={{ flex: '0 0 auto' }} onClick={cancelTable}>Cancel table</button>
       </div>
 
       <div className="card">
         <div className="hd"><h2>Guests</h2><div className="spacer"></div>
           <button className="btn sm ghost" onClick={() => setSheet('transfer')}>Transfer</button>{' '}
-          {canBill && <button className="btn sm ghost" onClick={() => setSheet('merge')}>Merge</button>}
+          <button className="btn sm ghost" onClick={() => setSheet('merge')}>Merge</button>
         </div>
         <div className="bd">
           <div className="row">
@@ -337,9 +380,6 @@ export default function TableDetailPage({ order, config, freeTables, otherOrders
               <span className="hint" style={{ display: 'block', marginBottom: 5 }}>Kids</span>
               <div className="stepper"><button onClick={() => bumpKids(-1)}>−</button><b>{kidCount}</b><button onClick={() => bumpKids(1)}>+</button></div>
             </div>
-            <label className="f" style={{ margin: 0, flex: '1 1 140px' }}><span>Waiter / captain</span>
-              <WaiterInput value={waiterName} onChange={setWaiterName} onBlur={saveWaiter} captains={captains} />
-            </label>
           </div>
           {overCapacity && <p className="hint" style={{ color: 'var(--berry)', marginTop: 10 }}>Table ki seating {capacity} hai — guests zyada hain.</p>}
           {order.advance > 0 && <p className="hint" style={{ marginTop: 10 }}>Advance liya hua: {INR(order.advance)} ({order.advanceMode})</p>}
@@ -383,13 +423,14 @@ export default function TableDetailPage({ order, config, freeTables, otherOrders
       ))}
 
       {playRunning && (
-        <div className="sess" style={playWarn && playWarn.state !== 'ok' ? { borderColor: 'var(--berry)', background: 'var(--berry-soft)' } : undefined}>
-          <span className="tm">{Math.floor(playMins / 60)}h {String(playMins % 60).padStart(2, '0')}m</span>
+        <div className="sess" style={playPaused ? { borderColor: 'var(--line-2)', background: 'var(--surface-2)' } : playWarn && playWarn.state !== 'ok' ? { borderColor: 'var(--berry)', background: 'var(--berry-soft)' } : undefined}>
+          <span className="tm">{playPaused ? '⏸ ' : ''}{Math.floor(playMins / 60)}h {String(playMins % 60).padStart(2, '0')}m</span>
           <span style={{ flex: 1, minWidth: 0 }}>
-            <b>Play chal raha hai</b><br />
+            <b>{playPaused ? 'Play paused (bacche bahar)' : 'Play chal raha hai'}</b><br />
             <span className="hint">{order.playKids} kid{order.playKids > 1 ? 's' : ''}{order.playMember ? ' · membership' : ''}{order.playPlannedMins ? ' · ' + order.playPlannedMins + ' min liya' : ''}</span>
             {playWarn && <><br /><b style={{ color: playWarn.state === 'ok' ? 'var(--muted)' : 'var(--berry)', fontSize: 13 }}>{playWarn.text}</b></>}
           </span>
+          <button className="btn sm" onClick={togglePause}>{playPaused ? '▶ Resume' : '⏸ Pause'}</button>
           <button className="btn sm dark" onClick={endTimer}>End & bill</button>
         </div>
       )}
@@ -422,6 +463,11 @@ export default function TableDetailPage({ order, config, freeTables, otherOrders
       <div className="card">
         <div className="hd"><h2>Bill</h2></div>
         <div className="bd">
+          {(order.paidBills || []).length > 0 && (
+            <p className="hint" style={{ margin: '0 0 10px' }}>
+              Alag bill ban chuke: {order.paidBills.map(b => `#${b.no} ${b.name || 'Walk-in'} ${INR(b.total)}`).join(' · ')}
+            </p>
+          )}
           <BillItemsCard items={items} removeItem={removeItem}
             discount={discount} setDiscount={setDiscount}
             discountType={discountType} setDiscountType={setDiscountType}
@@ -429,16 +475,20 @@ export default function TableDetailPage({ order, config, freeTables, otherOrders
             sub={sub} disc={disc} total={total} autoDiscount={autoDiscount}
             onNote={addNote}
             points={loyaltyOn && cust && !isNew ? cust.points || 0 : 0} pointValue={config.loyalty && config.loyalty.pointValue}
-            redeemPoints={redeemPoints} setRedeemPoints={setRedeemPoints} />
+            redeemPoints={redeemPoints} setRedeemPoints={setRedeemPoints}
+            serviceCharge={serviceCharge} setServiceCharge={setServiceCharge}
+            serviceChargeType={serviceChargeType} setServiceChargeType={setServiceChargeType} serviceChargeOn={config.serviceChargeOn} />
         </div>
       </div>
 
-      {canBill
-        ? <PayBar itemsCount={items.length} kids={kidsOnBill(items)} total={total} onClear={clearBill} onPay={() => setSheet('pay')} />
-        : <p className="hint" style={{ textAlign: 'center' }}>Bill counter (staff) banayega — total abhi {INR(total)}.</p>}
+      <PayBar itemsCount={items.length} kids={kidsOnBill(items)} total={total} onClear={clearBill} onPay={() => setSheet('pay')} onSplit={() => setSheet('split')} />
 
       <PaymentSheet open={sheet === 'pay'} total={total} onClose={() => setSheet(null)} onSave={onSaveBill} initialPay={initialPay} initialNote={initialNote} />
-      <ReceiptSheet open={sheet === 'receipt'} bill={lastBill} customer={lastCust} config={config} onClose={closeReceipt} doneLabel="Back to tables" />
+      <SplitSheet open={sheet === 'split'} items={items} onClose={() => setSheet(null)} onNext={startSplitPay} />
+      <PaymentSheet open={sheet === 'splitpay'} total={split ? split.total : 0} onClose={() => setSheet('split')} onSave={onSaveSplit}
+        initialPay={splitAdvance ? { [order.advanceMode || 'CASH']: splitAdvance } : undefined}
+        initialNote={split ? `Alag bill: ${split.picked.map(i => i.name + (i.qty > 1 ? ' ×' + i.qty : '')).join(', ')}${splitAdvance ? ` · Advance ${INR(order.advance)} (${order.advanceMode}) isme adjust — hatana ho to Clear split` : ''}` : undefined} />
+      <ReceiptSheet open={sheet === 'receipt'} bill={lastBill} customer={lastCust} config={config} onClose={closeReceipt} doneLabel={tableClosed ? 'Back to tables' : 'Back to table'} />
 
       <Sheet open={sheet === 'transfer'} onClose={() => setSheet(null)}>
         <h2 style={{ margin: '0 0 12px', fontSize: 17 }}>Kis table pe transfer karein?</h2>

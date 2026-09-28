@@ -6,9 +6,6 @@ import { billSubtotal } from '../utils/bill';
 import { INR } from '../utils/money';
 import Sheet from '../components/Sheet';
 import BookingsCard from '../components/BookingsCard';
-import CaptainAlerts from '../components/CaptainAlerts';
-import WaiterInput, { useCaptains, captainFor } from '../components/WaiterInput';
-import { useAuth } from '../context/AuthContext';
 import TableDetailPage from './TableDetailPage';
 import { useLiveEvents } from '../hooks/useLiveEvents';
 import { beep, playAlert } from '../utils/notify';
@@ -16,7 +13,7 @@ import { beep, playAlert } from '../utils/notify';
 // Things on a table that need staff attention right now.
 function tableAlerts(order) {
   const out = [];
-  const play = order.playStart ? playAlert(order.playStart, order.playPlannedMins) : null;
+  const play = order.playStart ? playAlert(order.playStart, order.playPlannedMins, order.playPausedMs, order.playPausedAt) : null;
   if (play && play.state !== 'ok') out.push({ key: 'play:' + play.state, text: '⏰ ' + play.text });
   (order.kots || []).filter(k => k.readyAt && !k.servedAt).forEach(k => out.push({ key: 'ready:' + k.no, text: '🍽 Food ready (KOT #' + k.no + ')' }));
   (order.requests || []).filter(r => r.status === 'new').forEach(r => out.push({ key: 'qr:' + r.id, text: '📱 Naya QR order' }));
@@ -27,15 +24,10 @@ const PAY_MODES = ['CASH', 'UPI', 'CARD'];
 
 function OpenTableSheet({ open, table, booking, onClose, onOpened }) {
   const toast = useToast();
-  const { user } = useAuth();
-  const captains = useCaptains();
-  const isCaptain = user.role === 'captain';
-  const myName = user.name || user.username;
   const [adults, setAdults] = useState(1);
   const [kids, setKids] = useState(0);
   const [phone, setPhone] = useState('');
   const [reserveOnly, setReserveOnly] = useState(false);
-  const [waiterName, setWaiterName] = useState('');
   const [advance, setAdvance] = useState(0);
   const [advanceMode, setAdvanceMode] = useState('CASH');
   const [busy, setBusy] = useState(false);
@@ -44,10 +36,10 @@ function OpenTableSheet({ open, table, booking, onClose, onOpened }) {
     if (open) {
       if (booking) {
         setAdults(booking.guests || 1); setKids(0); setPhone(booking.phone || '');
-        setReserveOnly(false); setWaiterName(isCaptain ? myName : ''); setAdvance(booking.advance || 0); setAdvanceMode(booking.advanceMode || 'CASH');
+        setReserveOnly(false); setAdvance(booking.advance || 0); setAdvanceMode(booking.advanceMode || 'CASH');
       } else {
         setAdults(1); setKids(0); setPhone(''); setReserveOnly(false);
-        setWaiterName(isCaptain ? myName : ''); setAdvance(0); setAdvanceMode('CASH');
+        setAdvance(0); setAdvanceMode('CASH');
       }
     }
   }, [open, table, booking]);
@@ -67,7 +59,7 @@ function OpenTableSheet({ open, table, booking, onClose, onOpened }) {
       const { data } = await api.post('/table-orders', {
         tableId: table.id, tableName: table.name,
         phone: phone.length === 10 ? phone : '', name, adults, kids,
-        reserved: reserveOnly, waiterName, waiterUser: captainFor(waiterName, captains) || (isCaptain && waiterName === myName ? user.username : ''),
+        reserved: reserveOnly,
         advance: reserveOnly ? 0 : advance, advanceMode,
         bookingId: booking ? booking._id : undefined
       });
@@ -108,9 +100,6 @@ function OpenTableSheet({ open, table, booking, onClose, onOpened }) {
         <input type="tel" inputMode="numeric" maxLength={10} placeholder="10 digit number"
           value={phone} onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))} />
       </label>
-      <label className="f"><span>Waiter / captain (optional)</span>
-        <WaiterInput value={waiterName} onChange={setWaiterName} captains={captains} />
-      </label>
       {!reserveOnly && (
         <div className="row">
           <label className="f" style={{ margin: 0, flex: '1 1 130px' }}><span>Advance (optional)</span>
@@ -136,8 +125,6 @@ function OpenTableSheet({ open, table, booking, onClose, onOpened }) {
 export default function TablesPage() {
   const { config } = useConfig();
   const toast = useToast();
-  const { user } = useAuth();
-  const isCaptain = user.role === 'captain';
   const [orders, setOrders] = useState([]);
   const [openId, setOpenId] = useState(null);
   const [pickTable, setPickTable] = useState(null);
@@ -171,8 +158,7 @@ export default function TablesPage() {
       now.add(k);
       if (seenAlerts.current && !seenAlerts.current.has(k)) fresh.push(o.tableName + ' — ' + a.text);
     }));
-    // Captains get their own (table-specific) alerts from CaptainAlerts.
-    if (fresh.length && !isCaptain) { beep(); toast(fresh[0]); }
+    if (fresh.length) { beep(); toast(fresh[0]); }
     seenAlerts.current = now;
   });
 
@@ -186,7 +172,6 @@ export default function TablesPage() {
   if (activeOrder) {
     return (
       <>
-      {isCaptain && <CaptainAlerts hidden me={user.username} orders={orders} onSync={() => {}} />}
       <TableDetailPage
         order={activeOrder}
         config={config}
@@ -204,13 +189,9 @@ export default function TablesPage() {
 
   return (
     <>
-      {isCaptain ? (
-        <CaptainAlerts me={user.username} orders={orders} onSync={(u) => setOrders(prev => prev.map(o => o._id === u._id ? u : o))} />
-      ) : (
-        <BookingsCard tables={tables} freeTables={freeTables}
-          onUseBooking={(b) => { setActiveBooking(b); toast('Ab kisi free table par tap karein — ' + b.name + ' ke liye'); }}
-          onAssigned={(created) => setOrders(prev => [...prev, ...created])} />
-      )}
+      <BookingsCard tables={tables} freeTables={freeTables}
+        onUseBooking={(b) => { setActiveBooking(b); toast('Ab kisi free table par tap karein — ' + b.name + ' ke liye'); }}
+        onAssigned={(created) => setOrders(prev => [...prev, ...created])} />
 
       {activeBooking && (
         <div className="card" style={{ borderColor: 'var(--accent)' }}>

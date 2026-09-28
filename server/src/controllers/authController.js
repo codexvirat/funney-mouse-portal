@@ -14,7 +14,7 @@ function publicUser(u) {
 }
 
 function normalizeRole(role) {
-  return ['admin', 'owner', 'kitchen', 'captain'].includes(role) ? role : 'staff';
+  return ['admin', 'owner', 'kitchen'].includes(role) ? role : 'staff';
 }
 
 exports.login = asyncHandler(async (req, res) => {
@@ -24,7 +24,8 @@ exports.login = asyncHandler(async (req, res) => {
     throw new Error('Username aur password dono chahiye');
   }
   const user = await User.findOne({ username: String(username).trim().toLowerCase() });
-  if (!user || !user.active || !(await user.comparePassword(password))) {
+  // 'captain' (waiter) logins were removed — old accounts can't sign in.
+  if (!user || !user.active || user.role === 'captain' || !(await user.comparePassword(password))) {
     res.status(401);
     throw new Error('Galat username ya password');
   }
@@ -53,11 +54,6 @@ exports.ownerLogin = asyncHandler(async (req, res) => {
   throw new Error('Galat PIN');
 });
 
-// Captains (waiters with their own login) that a table can be assigned to.
-exports.listCaptains = asyncHandler(async (req, res) => {
-  const users = await User.find({ role: 'captain', active: true }).select('username name').sort('name');
-  res.json({ captains: users.map(u => ({ username: u.username, name: u.name || u.username })) });
-});
 
 exports.listUsers = asyncHandler(async (req, res) => {
   const users = await User.find().select('-passwordHash').sort('username');

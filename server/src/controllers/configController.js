@@ -65,7 +65,7 @@ exports.getConfig = asyncHandler(async (req, res) => {
 
 exports.updateConfig = asyncHandler(async (req, res) => {
   const cfg = await getOrCreateConfig();
-  const fields = ['shopName', 'staffDiscount', 'playSlabs', 'extraHalfHour', 'sockPrice', 'adultFree', 'menu', 'plans', 'tables', 'memberDiscountPercent', 'memberDiscountMinSpend', 'happyHour', 'cgstPercent', 'sgstPercent', 'loyalty', 'qrOrdering'];
+  const fields = ['shopName', 'legalName', 'gstin', 'shopAddress', 'shopPhone', 'receiptFooter', 'staffDiscount', 'playSlabs', 'extraHalfHour', 'sockPrice', 'adultFree', 'menu', 'plans', 'tables', 'memberDiscountPercent', 'memberDiscountMinSpend', 'happyHour', 'cgstPercent', 'sgstPercent', 'serviceChargeDefault', 'serviceChargeType', 'serviceChargeOn', 'loyalty', 'qrOrdering'];
   const changed = fields.filter(f => req.body[f] !== undefined && JSON.stringify(req.body[f]) !== JSON.stringify(cfg.toObject()[f]));
   fields.forEach(f => {
     if (req.body[f] !== undefined) cfg[f] = req.body[f];

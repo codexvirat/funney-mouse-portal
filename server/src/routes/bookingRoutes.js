@@ -9,6 +9,7 @@ router.use(notifyOnWrite('tables'));
 
 // Owner portal lists pending bookings too (read-only).
 router.get('/', protect, allowRoles('admin', 'staff', 'owner'), ctrl.listBookings);
+router.get('/advance-summary', protect, allowRoles('admin', 'owner'), ctrl.advanceSummary);
 router.post('/', protect, floor, ctrl.createBooking);
 router.patch('/:id', protect, floor, ctrl.updateBooking);
 router.post('/:id/assign-tables', protect, floor, ctrl.assignTables);

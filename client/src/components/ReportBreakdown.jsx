@@ -22,6 +22,11 @@ export default function ReportBreakdown({ t }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}><span className="hint">Total GST</span><b className="num">{INR(t.cgst + t.sgst)}</b></div>
           </div>
         )}
+        {t.service > 0 && (
+          <div style={{ marginTop: 12, paddingTop: 11, borderTop: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between' }}>
+            <span className="hint">Service charge</span><b className="num">{INR(t.service)}</b>
+          </div>
+        )}
         {t.advance > 0 && (
           <div style={{ marginTop: 12, paddingTop: 11, borderTop: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between' }}>
             <span className="hint">Advance collected</span><b className="num">{INR(t.advance)}</b>
