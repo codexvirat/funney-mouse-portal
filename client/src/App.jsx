@@ -57,8 +57,10 @@ export default function App() {
 
   return (
     <>
-      <TopBar />
-      <Tabs view={view} setView={goView} />
+      <div className="appbar">
+        <TopBar />
+        <Tabs view={view} setView={goView} />
+      </div>
       <main className="wrap">
         {view === 'tables' && <TablesPage />}
         {view === 'bill' && <BillPage billIntent={billIntent} onConsumeIntent={() => setBillIntent(null)} />}

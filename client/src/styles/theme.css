@@ -40,8 +40,14 @@ button{cursor:pointer}
 .pill.live{color:var(--mint);border-color:color-mix(in srgb,var(--mint) 40%,transparent)}
 .pill.local{color:var(--berry);border-color:color-mix(in srgb,var(--berry) 40%,transparent)}
 
-nav.tabs{position:sticky;top:63px;z-index:29;background:var(--bg);padding-bottom:10px}
+/* Top bar + tabs stick together as one header, so the tabs can't slide
+   under a top bar that grew taller (e.g. the name wrapping on a phone). */
+.appbar{position:sticky;top:0;z-index:30;background:var(--bg);box-shadow:0 1px 0 var(--line),0 8px 16px -14px rgba(30,20,60,.45);margin-bottom:12px}
+.appbar .topbar{position:static}
+nav.tabs{background:var(--bg);padding:10px 0}
 nav.tabs .wrap{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+/* Wide screens (mouse): show every tab, wrapping to a second row. */
+@media (min-width:760px){nav.tabs .wrap{flex-wrap:wrap;overflow:visible}}
 nav.tabs .wrap::-webkit-scrollbar{display:none}
 .tab{border:1px solid var(--line-2);background:var(--surface);border-radius:999px;padding:9px 16px;font-weight:500;white-space:nowrap;color:var(--muted)}
 .tab[aria-current="true"]{background:var(--text);color:var(--bg);border-color:var(--text)}

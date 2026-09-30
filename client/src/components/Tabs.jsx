@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 
 const TABS = [
@@ -16,9 +17,26 @@ const TABS = [
 export default function Tabs({ view, setView }) {
   const { isAdmin, user } = useAuth();
   const tabs = isAdmin ? TABS : TABS.filter(t => !t.admin);
+  // On a narrow window the tabs scroll sideways with a hidden scrollbar; let
+  // a normal (vertical) mouse wheel scroll them too.
+  const row = useRef(null);
+  useEffect(() => {
+    const el = row.current;
+    if (!el) return undefined;
+    const onWheel = (e) => {
+      if (el.scrollWidth <= el.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      const max = el.scrollWidth - el.clientWidth;
+      const next = Math.max(0, Math.min(max, el.scrollLeft + e.deltaY));
+      if (next === el.scrollLeft) return;
+      e.preventDefault();
+      el.scrollLeft = next;
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
   return (
     <nav className="tabs" aria-label="Sections">
-      <div className="wrap">
+      <div className="wrap" ref={row}>
         {tabs.map(t => (
           <button key={t.key} className="tab" aria-current={view === t.key} onClick={() => setView(t.key)}>
             {t.label}
