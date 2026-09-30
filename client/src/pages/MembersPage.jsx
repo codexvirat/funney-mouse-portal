@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import api from '../api/client';
-import { useToast } from '../context/ToastContext';
 import { useConfig } from '../context/ConfigContext';
 import { openWhatsApp } from '../utils/notify';
 import { prettyDate } from '../utils/date';
 import { memberBalance, memberValidity } from '../utils/member';
+import NewMembershipCard from '../components/NewMembershipCard';
 
 function reminderText(m, shop) {
   const who = m.name ? m.name + ' ji' : 'Namaste';
@@ -39,10 +39,11 @@ function MemberRow({ m, shop, onStartMembership, onViewCustomer }) {
 }
 
 export default function MembersPage({ onStartMembership, onViewCustomer }) {
-  const toast = useToast();
   const { config } = useConfig();
   const shop = (config && config.shopName) || 'Funny Mouse';
-  const [phone, setPhone] = useState('');
+  // Renew from a member row fills that number into the Nayi membership form.
+  const [renew, setRenew] = useState(null);
+  const renewHere = (phone) => { setRenew({ phone, at: Date.now() }); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -59,18 +60,7 @@ export default function MembersPage({ onStartMembership, onViewCustomer }) {
 
   return (
     <>
-      <div className="card"><div className="hd"><h2>Membership</h2></div><div className="bd">
-        <div className="row">
-          <label className="f" style={{ margin: 0, flex: '2 1 190px' }}><span>Naya member banaye — mobile number</span>
-            <input type="tel" inputMode="numeric" maxLength={10} placeholder="10 digit number"
-              value={phone} onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))} />
-          </label>
-          <div style={{ flex: '0 0 auto', display: 'flex', alignItems: 'flex-end' }}>
-            <button className="btn dark" onClick={() => { if (phone.length !== 10) { toast('10 digit number daaliye'); return; } onStartMembership(phone); }}>Plan chunein</button>
-          </div>
-        </div>
-        <p className="hint" style={{ margin: '8px 0 0' }}>Plan bill ke through bikega, taaki payment mode aur day-end total me sahi count ho.</p>
-      </div></div>
+      <NewMembershipCard onDone={load} prefill={renew} />
 
       {loading ? <p className="hint">Loading…</p> : (
         <>
@@ -82,13 +72,13 @@ export default function MembersPage({ onStartMembership, onViewCustomer }) {
           </div>
           {alertList.length > 0 && (
             <div className="card"><div className="hd"><h2>Renewal due</h2></div><div className="bd">
-              {alertList.map(m => <MemberRow key={m.phone} m={m} shop={shop} onStartMembership={onStartMembership} onViewCustomer={onViewCustomer} />)}
+              {alertList.map(m => <MemberRow key={m.phone} m={m} shop={shop} onStartMembership={renewHere} onViewCustomer={onViewCustomer} />)}
             </div></div>
           )}
           <div className="card"><div className="hd"><h2>Sab members</h2><div className="spacer"></div><span className="hint">{members.length} total</span></div>
             <div className="bd">
               {members.length
-                ? members.map(m => <MemberRow key={m.phone} m={m} shop={shop} onStartMembership={onStartMembership} onViewCustomer={onViewCustomer} />)
+                ? members.map(m => <MemberRow key={m.phone} m={m} shop={shop} onStartMembership={renewHere} onViewCustomer={onViewCustomer} />)
                 : <div className="empty"><b>Abhi koi member nahi</b>Upar number daal kar pehla plan bech dijiye.</div>}
             </div>
           </div>
