@@ -241,7 +241,8 @@ function Section({ title, children }) {
   );
 }
 
-export default function PartyBookingSheet({ open, booking, onClose, onSaved }) {
+// prefill: fields to start a new form with (e.g. from a party enquiry).
+export default function PartyBookingSheet({ open, booking, prefill, onClose, onSaved }) {
   const toast = useToast();
   const { config } = useConfig();
   const shopName = (config && config.shopName) || 'Funny Mouse';
@@ -249,7 +250,7 @@ export default function PartyBookingSheet({ open, booking, onClose, onSaved }) {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (open) setP(booking ? partyFromBooking(booking) : blankParty());
+    if (open) setP(booking ? partyFromBooking(booking) : { ...blankParty(), ...(prefill || {}) });
   }, [open, booking]);
 
   const set = (k, v) => setP(prev => ({ ...prev, [k]: v }));

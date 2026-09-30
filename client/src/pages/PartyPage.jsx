@@ -9,6 +9,7 @@ import PartyBookingSheet, { calcParty, partyFormHTML, nth } from '../components/
 import PaymentSheet from '../components/PaymentSheet';
 import ReceiptSheet from '../components/ReceiptSheet';
 import PartyExtrasSheet from '../components/PartyExtrasSheet';
+import InquiriesPanel from '../components/InquiriesPanel';
 
 const FILTERS = [
   { key: 'pending', label: 'Upcoming' },
@@ -37,6 +38,20 @@ export default function PartyPage() {
   const [billing, setBilling] = useState(null); // booking being billed
   const [receipt, setReceipt] = useState(null); // { bill, customer }
   const [extrasFor, setExtrasFor] = useState(null); // booking getting an extra order
+  const [tab, setTab] = useState('bookings'); // 'bookings' | 'inquiries'
+  const [inqReload, setInqReload] = useState(0);
+
+  // Enquiry -> party booking form, prefilled; saving it marks the enquiry booked.
+  const convertInquiry = (iq) => setEditing({
+    booking: null,
+    inquiry: iq,
+    prefill: {
+      enquiryDate: iq.inquiryDate || dstr(), childName: iq.childName || '', motherName: iq.name || '', motherPhone: iq.phone || '',
+      partyDate: iq.partyDate || dstr(), reference: iq.source || '', requirements: iq.note || '',
+      foodPackage: iq.packageInterest || 'Elite',
+      kids: { count: iq.kids || 0, rate: 0 }, adults: { count: iq.adults || 0, rate: 0 }
+    }
+  });
 
   const load = useCallback(async () => {
     try {
@@ -97,8 +112,40 @@ export default function PartyPage() {
   const byDate = {};
   bookings.forEach(b => { byDate[b.eventDate] = (byDate[b.eventDate] || 0) + 1; });
 
+  const tabs = (
+    <div className="seg" style={{ marginBottom: 14 }}>
+      <button aria-pressed={tab === 'bookings'} onClick={() => setTab('bookings')}>Party bookings</button>
+      <button aria-pressed={tab === 'inquiries'} onClick={() => setTab('inquiries')}>Inquiries</button>
+    </div>
+  );
+
+  const bookingSheet = (
+    <PartyBookingSheet open={!!editing} booking={editing && editing.booking} prefill={editing && editing.prefill} onClose={() => setEditing(null)}
+      onSaved={async (saved) => {
+        const iq = editing && editing.inquiry;
+        setEditing(null);
+        if (iq && saved) {
+          try { await api.patch('/inquiries/' + iq._id, { status: 'converted', bookingId: saved._id }); } catch (e) { /* booking is saved; status can be fixed by hand */ }
+          setInqReload(k => k + 1);
+          setTab('bookings');
+        }
+        if (status !== 'pending') setStatus('pending'); else load();
+      }} />
+  );
+
+  if (tab === 'inquiries') {
+    return (
+      <>
+        {tabs}
+        <InquiriesPanel onConvert={convertInquiry} reloadKey={inqReload} />
+        {bookingSheet}
+      </>
+    );
+  }
+
   return (
     <>
+      {tabs}
       <div className="card">
         <div className="hd" style={{ flexWrap: 'wrap' }}>
           <h2>Party bookings</h2><div className="spacer"></div>
@@ -204,8 +251,7 @@ export default function PartyPage() {
           (billCalc.advance ? ` · advance ${INR(billCalc.advance)} (${advMode}) pehle mil chuka · baaki ${INR(billCalc.balance)}` : '') : undefined} />
       <ReceiptSheet open={!!receipt} bill={receipt && receipt.bill} customer={receipt && receipt.customer} config={config} onClose={() => setReceipt(null)} doneLabel="Done" />
       {extrasFor && <PartyExtrasSheet booking={extrasFor} onClose={() => setExtrasFor(null)} onSaved={() => { setExtrasFor(null); load(); }} />}
-      <PartyBookingSheet open={!!editing} booking={editing && editing.booking} onClose={() => setEditing(null)}
-        onSaved={() => { setEditing(null); if (status !== 'pending') setStatus('pending'); else load(); }} />
+      {bookingSheet}
     </>
   );
 }
