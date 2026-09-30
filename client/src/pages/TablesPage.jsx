@@ -122,7 +122,9 @@ function OpenTableSheet({ open, table, booking, onClose, onOpened }) {
   );
 }
 
-export default function TablesPage() {
+// focusOrder: a table just opened from the start popup (member) — show it.
+// onNewGuest: reopen the Member / Non-member / Party popup.
+export default function TablesPage({ focusOrder, onFocused, onNewGuest }) {
   const { config } = useConfig();
   const toast = useToast();
   const [orders, setOrders] = useState([]);
@@ -140,6 +142,13 @@ export default function TablesPage() {
   }, []);
 
   useLiveEvents(['tables'], load);
+
+  useEffect(() => {
+    if (!focusOrder) return;
+    setOrders(prev => prev.some(o => o._id === focusOrder._id) ? prev : [...prev, focusOrder]);
+    setOpenId(focusOrder._id);
+    if (onFocused) onFocused();
+  }, [focusOrder, onFocused]);
 
   useEffect(() => {
     load();
@@ -203,7 +212,8 @@ export default function TablesPage() {
       )}
 
       <div className="card">
-        <div className="hd"><h2>Tables</h2><div className="spacer"></div><span className="hint">{orders.filter(o => !o.reserved).length} occupied / {tables.length}</span></div>
+        <div className="hd"><h2>Tables</h2><div className="spacer"></div><span className="hint">{orders.filter(o => !o.reserved).length} occupied / {tables.length}</span>
+          {onNewGuest && <button className="btn sm primary" onClick={onNewGuest}>+ Naya guest</button>}</div>
         <div className="bd">
           {!tables.length && (
             <div className="empty"><b>Koi table set nahi hai</b>Setup me tables add kar dijiye.</div>

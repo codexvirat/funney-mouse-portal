@@ -30,6 +30,7 @@ function shortDate(d) {
 }
 
 function itemName(i) {
+  if (i.cat === 'play' && i.meta && i.meta.visitCharged) return `${i.name} (${i.meta.planName || 'membership'})`;
   if (i.cat === 'play' && i.meta) return `${i.name} (${i.meta.minutes} min)`;
   return i.name;
 }
@@ -181,7 +182,10 @@ export default function ReceiptSheet({ open, bill, customer, config, onClose, do
         {bill.advance > 0 && (
           <p className="hint" style={{ margin: '4px 0 0' }}>Advance collected earlier: {INR(bill.advance)} ({bill.advanceMode})</p>
         )}
-        {customer && customer.membership && customer.membership.hours > 0 && (
+        {customer && customer.membership && customer.membership.kind === 'visits' && (
+          <p className="hint" style={{ margin: '6px 0 0' }}>Membership: {customer.membership.visits > 0 ? `${customer.membership.visitsLeft || 0} visits bache` : 'Unlimited visits'}</p>
+        )}
+        {customer && customer.membership && customer.membership.kind !== 'visits' && customer.membership.hours > 0 && (
           <p className="hint" style={{ margin: '6px 0 0' }}>Membership balance: {customer.membership.hoursLeft} hr</p>
         )}
       </div>

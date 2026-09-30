@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../api/client';
+import { memberBalance, memberValidity } from '../utils/member';
 import { INR } from '../utils/money';
 import { prettyDate, dayMonth, dstr } from '../utils/date';
 import { useConfig } from '../context/ConfigContext';
@@ -144,7 +145,7 @@ export default function CustomersPage({ initialQuery, onBillThis, onMemThis }) {
               <div className="custfound" style={{ marginBottom: 14, background: 'var(--grape-soft)', borderColor: 'var(--grape)' }}>
                 <div className="av" style={{ background: 'var(--grape)' }}>M</div>
                 <div><b>{cust.membership.planName}</b>
-                  <div className="hint">{cust.membership.hours > 0 ? cust.membership.hoursLeft + ' hr left' : 'Unlimited'} · valid till {cust.membership.expiresAt}</div>
+                  <div className="hint">{memberBalance(cust.membership)} · {memberValidity(cust.membership)}{cust.membership.kind === 'visits' && cust.membership.visitsUsed ? ` · ${cust.membership.visitsUsed} visits use hue` : ''}</div>
                 </div>
               </div>
             )}

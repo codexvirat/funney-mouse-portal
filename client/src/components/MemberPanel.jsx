@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { INR } from '../utils/money';
-import { memberActive, memberLabel } from '../utils/member';
+import { memberActive, memberLabel, planSummary } from '../utils/member';
 
 export default function MemberPanel({ config, cust, setPhone, items, onAdd, toast }) {
   const [memPhone, setMemPhone] = useState('');
@@ -30,7 +30,7 @@ export default function MemberPanel({ config, cust, setPhone, items, onAdd, toas
         <div className="custfound" style={{ marginBottom: 12, background: active ? 'var(--grape-soft)' : 'var(--berry-soft)', borderColor: active ? 'var(--grape)' : 'var(--berry)' }}>
           <div className="av" style={{ background: active ? 'var(--grape)' : 'var(--berry)' }}>M</div>
           <div><b>{cur.planName}</b><div className="hint">{memberLabel(cust)}</div>
-            <div className="hint">{active ? 'Wahi plan dobara lene par hours aur validity jud jayenge.' : 'Expired — naya plan lene par fresh shuru hoga.'}</div>
+            <div className="hint">{active ? (cur.kind === 'visits' ? 'Wahi pass dobara lene par visits jud jayenge.' : 'Wahi plan dobara lene par hours aur validity jud jayenge.') : 'Khatam — naya plan lene par fresh shuru hoga.'}</div>
           </div>
         </div>
       )}
@@ -42,12 +42,12 @@ export default function MemberPanel({ config, cust, setPhone, items, onAdd, toas
               if (alreadyHasPlan) { toast('Ek bill me ek hi plan'); return; }
               onAdd({
                 cat: 'member', refId: pl.id, name: 'Membership · ' + pl.name, qty: 1, rate: pl.price, amount: pl.price,
-                meta: { hours: pl.hours, days: pl.days, planName: pl.name }
+                meta: { kind: pl.kind || 'hours', hours: pl.hours, visits: pl.visits || 0, days: pl.days, planName: pl.name }
               });
               toast('Plan added');
             }}>
               <strong style={{ fontSize: '14.5px', fontWeight: 700 }}>{pl.name}{same ? ' · renew' : ''}</strong>
-              <em>{INR(pl.price)} · {pl.hours > 0 ? pl.hours + ' hrs' : 'Unlimited'} · {pl.days} days</em>
+              <em>{INR(pl.price)} · {planSummary(pl)}</em>
             </button>
           );
         })}

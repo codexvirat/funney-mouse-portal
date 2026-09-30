@@ -7,7 +7,11 @@ export default function PlayPanel({
   config, cust, useMember, setUseMember, playKids, setPlayKids,
   playSlab, setPlaySlab, playCustom, setPlayCustom, onAdd, toast, onStartTimer
 }) {
-  const canMember = memberActive(cust);
+  const mem = cust && cust.membership;
+  const visitPass = !!(mem && mem.kind === 'visits');
+  // A limited visit pass must have a visit left for every kid on this entry.
+  const visitsShort = visitPass && mem.visits > 0 && (mem.visitsLeft || 0) < playKids;
+  const canMember = memberActive(cust) && !visitsShort;
   const slabs = slabSorted(config);
   const mins = playCustom || (slabs.find(s => s.id === playSlab) || slabs[0] || { minutes: 60 }).minutes;
   const amt = (useMember && canMember) ? 0 : priceForMinutes(config, mins) * playKids;
@@ -63,8 +67,12 @@ export default function PlayPanel({
       {canMember && (
         <label style={{ display: 'flex', gap: 9, alignItems: 'center', marginBottom: 12, fontSize: 14 }}>
           <input type="checkbox" checked={useMember} onChange={e => setUseMember(e.target.checked)} style={{ width: 18, height: 18 }} />
-          Membership se kaato ({memberLabel(cust)})
+          <span>Membership se kaato ({memberLabel(cust)})
+            {visitPass && <><br /><span className="hint">{playKids} visit katega · member: {cust.name || cust.phone}{cust.kid ? ' (' + cust.kid + ')' : ''}</span></>}</span>
         </label>
+      )}
+      {memberActive(cust) && visitsShort && (
+        <p className="hint" style={{ color: 'var(--berry)', margin: '0 0 12px' }}>Membership me sirf {mem.visitsLeft || 0} visit bache hain — {playKids} kids ke liye kaafi nahi. Kids kam karein ya pass renew karein.</p>
       )}
       <div className="row">
         <button className="btn dark" style={{ flex: '2 1 200px' }} onClick={addPlay}>Add play · {INR(amt)}</button>

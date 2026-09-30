@@ -129,7 +129,11 @@ export default function TableDetailPage({ order, config, freeTables, otherOrders
   }, [persist]);
 
   const addItem = (item) => mutateItems(prev => [...prev, { id: uid(), ...item }]);
-  const removeItem = (id) => mutateItems(prev => prev.filter(i => i.id !== id));
+  const removeItem = (id) => {
+    const it = items.find(i => i.id === id);
+    if (it && it.meta && it.meta.visitCharged && !window.confirm('Ye membership visit hai — hatane par member ki visit wapas mil jayegi. Hata dein?')) return;
+    mutateItems(prev => prev.filter(i => i.id !== id));
+  };
 
   const clearBill = () => {
     if (!items.length) return;

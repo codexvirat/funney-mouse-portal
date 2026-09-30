@@ -6,7 +6,14 @@ const menuItemSchema = new mongoose.Schema({
   category: { type: String, default: '' },
   available: { type: Boolean, default: true }
 }, { _id: false });
-const planSchema = new mongoose.Schema({ id: String, name: String, price: Number, hours: Number, days: Number, discountPercent: { type: Number, default: 0 } }, { _id: false });
+// kind 'hours' = play hours valid for `days`; kind 'visits' = a pass of
+// `visits` visits (0 = unlimited). days 0 = lifetime, no expiry.
+const planSchema = new mongoose.Schema({
+  id: String, name: String, price: Number, hours: Number, days: Number,
+  discountPercent: { type: Number, default: 0 },
+  kind: { type: String, enum: ['hours', 'visits'], default: 'hours' },
+  visits: { type: Number, default: 0 }
+}, { _id: false });
 // qrToken goes in the table's QR-order link so strangers can't post orders
 // to a table just by guessing its id.
 const tableSchema = new mongoose.Schema({ id: String, name: String, capacity: Number, qrToken: { type: String, default: '' } }, { _id: false });

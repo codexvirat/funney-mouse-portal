@@ -8,6 +8,23 @@ const { pendingKot } = require('../utils/kot');
 const { audit } = require('../utils/audit');
 const { priceForMinutes, playElapsedMins } = require('../utils/pricing');
 const { finalizeBill } = require('./billController');
+const Customer = require('../models/Customer');
+const { memberActive, chargedVisitsByPhone } = require('../utils/member');
+
+// Put visits charged at table-open back on the member's pass (table
+// cancelled, or the visit line removed before billing).
+async function refundVisits(byPhone) {
+  for (const [phone, n] of Object.entries(byPhone)) {
+    if (!(n > 0)) continue;
+    const c = await Customer.findOne({ phone });
+    const m = c && c.membership;
+    if (!m || m.kind !== 'visits') continue;
+    m.visitsUsed = Math.max(0, (m.visitsUsed || 0) - n);
+    if (m.visits > 0) m.visitsLeft = Math.min(m.visits, (m.visitsLeft || 0) + n);
+    c.markModified('membership');
+    await c.save();
+  }
+}
 
 exports.listTableOrders = asyncHandler(async (req, res) => {
   const orders = await TableOrder.find().sort('openedAt');
@@ -15,7 +32,7 @@ exports.listTableOrders = asyncHandler(async (req, res) => {
 });
 
 exports.openTable = asyncHandler(async (req, res) => {
-  const { tableId, tableName, phone, name, adults, kids, reserved, reservedNote, advance, advanceMode, bookingId } = req.body;
+  const { tableId, tableName, phone, name, adults, kids, reserved, reservedNote, advance, advanceMode, bookingId, member, memberKids } = req.body;
   if (!tableId) {
     res.status(400);
     throw new Error('Table select karein');
@@ -25,12 +42,35 @@ exports.openTable = asyncHandler(async (req, res) => {
     res.status(409);
     throw new Error('Ye table pehle se occupied hai');
   }
+  // Member table: verified by the member's number. On a visit pass, one
+  // visit per kid is charged right now and a ₹0 "Membership visit" line goes
+  // on the table, so the bill is only for food (and extras).
+  let memberCust = null, visitKids = 0;
+  if (member) {
+    const p = String(phone || '');
+    memberCust = p.length === 10 ? await Customer.findOne({ phone: p }) : null;
+    if (!memberCust || !memberActive(memberCust)) {
+      res.status(400);
+      throw new Error('Is number par active membership nahi hai');
+    }
+    const m = memberCust.membership;
+    if (m.kind === 'visits') {
+      visitKids = Math.max(1, Math.floor(Number(memberKids) || 1));
+      if (m.visits > 0 && (m.visitsLeft || 0) < visitKids) {
+        res.status(400);
+        throw new Error(`Membership me sirf ${m.visitsLeft || 0} visit bache hain, ${visitKids} chahiye`);
+      }
+    }
+  }
   const order = await TableOrder.create({
     tableId, tableName: tableName || '',
-    phone: phone || '', name: name || 'Walk-in',
+    phone: phone || '', name: name || (memberCust && memberCust.name) || 'Walk-in',
     adults: Math.max(0, Number(adults) || 0),
-    kids: Math.max(0, Number(kids) || 0),
-    items: [],
+    kids: Math.max(visitKids, Number(kids) || 0),
+    items: visitKids ? [{
+      cat: 'play', refId: null, name: 'Membership visit', qty: visitKids, rate: 0, amount: 0,
+      meta: { minutes: 0, kids: visitKids, member: true, visitCharged: true, memberPhone: memberCust.phone, planName: memberCust.membership.planName }
+    }] : [],
     reserved: !!reserved,
     reservedNote: reservedNote || '',
     advance: Math.max(0, Number(advance) || 0),
@@ -42,7 +82,15 @@ exports.openTable = asyncHandler(async (req, res) => {
   if (bookingId) {
     await Booking.findByIdAndUpdate(bookingId, { status: 'used', usedTableId: tableId, usedTableIds: [tableId] });
   }
-  res.status(201).json({ order });
+  if (visitKids) {
+    const m = memberCust.membership;
+    m.visitsUsed = (m.visitsUsed || 0) + visitKids;
+    if (m.visits > 0) m.visitsLeft = Math.max(0, (m.visitsLeft || 0) - visitKids);
+    memberCust.markModified('membership');
+    await memberCust.save();
+    await audit(req.user, 'Member visit', `${tableName || tableId} · ${memberCust.name || memberCust.phone} · ${visitKids} visit · ${m.planName}${m.visits > 0 ? ` (${m.visitsLeft} bache)` : ''}`, order._id);
+  }
+  res.status(201).json({ order, customer: memberCust });
 });
 
 exports.updateTableOrder = asyncHandler(async (req, res) => {
@@ -56,7 +104,16 @@ exports.updateTableOrder = asyncHandler(async (req, res) => {
   if (name !== undefined) order.name = name;
   if (adults !== undefined) order.adults = Math.max(0, Number(adults) || 0);
   if (kids !== undefined) order.kids = Math.max(0, Number(kids) || 0);
-  if (items !== undefined) order.items = items;
+  if (items !== undefined) {
+    // A pre-charged membership visit line removed (or its kids reduced)
+    // before billing gets its visits back.
+    const before = chargedVisitsByPhone(order.items);
+    const after = chargedVisitsByPhone(items);
+    const back = {};
+    Object.keys(before).forEach(ph => { const d = before[ph] - (after[ph] || 0); if (d > 0) back[ph] = d; });
+    order.items = items;
+    await refundVisits(back);
+  }
   if (reserved !== undefined) order.reserved = !!reserved;
   if (reservedNote !== undefined) order.reservedNote = reservedNote;
   if (advance !== undefined) order.advance = Math.max(0, Number(advance) || 0);
@@ -71,6 +128,7 @@ exports.cancelTableOrder = asyncHandler(async (req, res) => {
     res.status(404);
     throw new Error('Table order not found');
   }
+  await refundVisits(chargedVisitsByPhone(order.items));
   const value = order.items.reduce((a, i) => a + (i.amount || 0), 0);
   const split = (order.paidBills || []).length ? ` · ${order.paidBills.length} split bill(s) pehle ban chuke` : '';
   await audit(req.user, order.reserved ? 'Reservation cancelled' : 'Table cancelled',

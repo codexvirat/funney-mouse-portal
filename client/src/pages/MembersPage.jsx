@@ -4,11 +4,12 @@ import { useToast } from '../context/ToastContext';
 import { useConfig } from '../context/ConfigContext';
 import { openWhatsApp } from '../utils/notify';
 import { prettyDate } from '../utils/date';
+import { memberBalance, memberValidity } from '../utils/member';
 
 function reminderText(m, shop) {
   const who = m.name ? m.name + ' ji' : 'Namaste';
   const reason = m.state === 'low'
-    ? `aapke ${m.planName} me sirf ${Math.round((m.hoursLeft || 0) * 10) / 10} hour bache hain`
+    ? (m.kind === 'visits' ? `aapke ${m.planName} me sirf ${m.visitsLeft || 0} visit bache hain` : `aapke ${m.planName} me sirf ${Math.round((m.hoursLeft || 0) * 10) / 10} hour bache hain`)
     : m.state === 'expired' || m.state === 'used'
       ? `aapka ${m.planName} khatam ho gaya hai`
       : `aapka ${m.planName} ${m.expiresAt ? prettyDate(m.expiresAt) : 'jaldi'} ko khatam ho raha hai`;
@@ -17,17 +18,17 @@ function reminderText(m, shop) {
 
 const MEMTAG = {
   active: ['Active', 'var(--mint)'], expiring: ['Expiring soon', 'var(--berry)'],
-  low: ['Low hours', 'var(--berry)'], expired: ['Expired', 'var(--muted)'], used: ['Hours over', 'var(--muted)']
+  low: ['Kam bacha', 'var(--berry)'], expired: ['Expired', 'var(--muted)'], used: ['Khatam', 'var(--muted)']
 };
 
 function MemberRow({ m, shop, onStartMembership, onViewCustomer }) {
   const [label, color] = MEMTAG[m.state] || MEMTAG.active;
-  const bal = m.hours > 0 ? (Math.round((m.hoursLeft || 0) * 10) / 10) + ' / ' + m.hours + ' hr' : 'Unlimited';
+  const bal = memberBalance(m);
   return (
     <div className="sess" style={{ background: 'var(--surface-2)', borderColor: 'var(--line-2)' }}>
       <span style={{ flex: '1 1 160px', minWidth: 0 }}>
         <b>{m.name || m.phone}</b>
-        <div className="hint">{m.phone} · {m.planName} · {bal} · till {m.expiresAt || '—'}</div>
+        <div className="hint">{m.phone} · {m.planName} · {bal} · {memberValidity(m)}</div>
       </span>
       <span className="badge" style={{ background: 'transparent', border: `1px solid ${color}`, color }}>{label}</span>
       {m.state !== 'active' && <button className="btn sm ghost" onClick={() => openWhatsApp(m.phone, reminderText(m, shop))}>WhatsApp reminder</button>}
@@ -52,7 +53,8 @@ export default function MembersPage({ onStartMembership, onViewCustomer }) {
   useEffect(() => { load(); }, []);
 
   const live = members.filter(m => ['active', 'expiring', 'low'].includes(m.state));
-  const hoursLeft = live.reduce((a, m) => a + (m.hours > 0 ? (m.hoursLeft || 0) : 0), 0);
+  const hoursLeft = live.reduce((a, m) => a + (m.kind !== 'visits' && m.hours > 0 ? (m.hoursLeft || 0) : 0), 0);
+  const visitsLeft = live.reduce((a, m) => a + (m.kind === 'visits' && m.visits > 0 ? (m.visitsLeft || 0) : 0), 0);
   const alertList = members.filter(m => ['expiring', 'low'].includes(m.state));
 
   return (
@@ -74,7 +76,8 @@ export default function MembersPage({ onStartMembership, onViewCustomer }) {
         <>
           <div className="stats" style={{ marginBottom: 14 }}>
             <div className="stat"><small>Active members</small><b>{live.length}</b></div>
-            <div className="stat"><small>Unused hours (liability)</small><b>{Math.round(hoursLeft * 10) / 10}</b></div>
+            {hoursLeft > 0 && <div className="stat"><small>Unused hours (liability)</small><b>{Math.round(hoursLeft * 10) / 10}</b></div>}
+            <div className="stat"><small>Bache visits (passes)</small><b>{visitsLeft}</b></div>
             <div className="stat"><small>Attention chahiye</small><b>{alertList.length}</b></div>
           </div>
           {alertList.length > 0 && (

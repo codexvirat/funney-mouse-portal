@@ -7,7 +7,13 @@ const membershipSchema = new mongoose.Schema({
   hoursLeft: Number,
   startedAt: String,
   expiresAt: String,
-  renewals: { type: Number, default: 0 }
+  renewals: { type: Number, default: 0 },
+  // Visit passes: visits = 0 means unlimited; one visit is used per kid each
+  // time membership play is billed.
+  kind: { type: String, default: 'hours' },
+  visits: { type: Number, default: 0 },
+  visitsLeft: { type: Number, default: 0 },
+  visitsUsed: { type: Number, default: 0 }
 }, { _id: false });
 
 const recentSchema = new mongoose.Schema({

@@ -5,7 +5,13 @@ const { dstr } = require('../utils/date');
 function memState(m) {
   const today = dstr();
   if (m.expiresAt && today > m.expiresAt) return 'expired';
+  if (m.kind === 'visits') {
+    if (m.visits > 0 && (m.visitsLeft || 0) <= 0) return 'used';
+    if (m.visits > 0 && m.visitsLeft <= 2) return 'low';
+    return 'active';
+  }
   if (m.hours > 0 && (m.hoursLeft || 0) <= 0) return 'used';
+  if (!m.expiresAt) return m.hours > 0 && m.hoursLeft <= 2 ? 'low' : 'active';
   const days = Math.round((new Date(m.expiresAt + 'T00:00') - new Date(today + 'T00:00')) / 86400000);
   if (days <= 7) return 'expiring';
   if (m.hours > 0 && m.hoursLeft <= 2) return 'low';
@@ -22,6 +28,7 @@ exports.listMembers = asyncHandler(async (req, res) => {
       return {
         phone: c.phone, name: c.name, kid: c.kid,
         planId: m.planId, planName: m.planName, hours: m.hours, hoursLeft: m.hoursLeft,
+        kind: m.kind || 'hours', visits: m.visits || 0, visitsLeft: m.visitsLeft || 0, visitsUsed: m.visitsUsed || 0,
         startedAt: m.startedAt, expiresAt: m.expiresAt, state
       };
     })

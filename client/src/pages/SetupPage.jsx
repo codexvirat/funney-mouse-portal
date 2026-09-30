@@ -186,8 +186,16 @@ export default function SetupPage() {
   const addMenu = () => setForm(prev => ({ ...prev, menu: [...prev.menu, { id: uid(), name: 'New item', price: 0 }] }));
   const delMenu = (i) => setForm(prev => ({ ...prev, menu: prev.menu.filter((_, ix) => ix !== i) }));
 
-  const updatePlan = (i, f, v) => setForm(prev => { const arr = [...prev.plans]; arr[i] = { ...arr[i], [f]: f === 'name' ? v : (Number(v) || 0) }; return { ...prev, plans: arr }; });
-  const addPlan = () => setForm(prev => ({ ...prev, plans: [...prev.plans, { id: uid(), name: 'New plan', price: 0, hours: 0, days: 30, discountPercent: 0 }] }));
+  const updatePlan = (i, f, v) => setForm(prev => { const arr = [...prev.plans]; arr[i] = { ...arr[i], [f]: f === 'name' || f === 'kind' ? v : (Number(v) || 0) }; return { ...prev, plans: arr }; });
+  const addPlan = () => setForm(prev => ({ ...prev, plans: [...prev.plans, { id: uid(), name: 'New plan', kind: 'hours', price: 0, hours: 0, visits: 0, days: 30, discountPercent: 0 }] }));
+  // The lifetime visit passes from the shop's playtime menu card.
+  const addVisitPasses = () => setForm(prev => {
+    const have = new Set(prev.plans.map(p => p.name.trim().toLowerCase()));
+    const passes = [['10 Visits Pass', 4000, 10], ['20 Visits Pass', 6000, 20], ['50 Visits Pass', 10000, 50], ['Unlimited Lifetime', 18000, 0]]
+      .filter(([name]) => !have.has(name.toLowerCase()))
+      .map(([name, price, visits]) => ({ id: uid(), name, kind: 'visits', price, hours: 0, visits, days: 0, discountPercent: 0 }));
+    return { ...prev, plans: [...prev.plans, ...passes] };
+  });
   const delPlan = (i) => setForm(prev => ({ ...prev, plans: prev.plans.filter((_, ix) => ix !== i) }));
 
   const happyHour = form.happyHour || { enabled: false, start: '15:00', end: '18:00', discountPercent: 0 };
@@ -339,17 +347,32 @@ export default function SetupPage() {
 
       <div className="card"><div className="hd"><h2>Membership plans</h2></div><div className="bd">
         {form.plans.map((p, i) => (
-          <div className="row" key={p.id} style={{ marginBottom: 8 }}>
-            <input type="text" value={p.name} style={{ flex: '3 1 150px' }} onChange={e => updatePlan(i, 'name', e.target.value)} />
-            <input type="number" value={p.price} placeholder="₹" onChange={e => updatePlan(i, 'price', e.target.value)} />
-            <input type="number" value={p.hours} placeholder="hrs" onChange={e => updatePlan(i, 'hours', e.target.value)} />
-            <input type="number" value={p.days} placeholder="days" onChange={e => updatePlan(i, 'days', e.target.value)} />
-            <input type="number" min="0" max="100" value={p.discountPercent || 0} placeholder="disc %" style={{ flex: '1 1 80px' }} onChange={e => updatePlan(i, 'discountPercent', e.target.value)} />
+          <div className="row" key={p.id} style={{ marginBottom: 8, alignItems: 'flex-end' }}>
+            <label className="f" style={{ margin: 0, flex: '3 1 150px' }}><span>Plan</span>
+              <input type="text" value={p.name} onChange={e => updatePlan(i, 'name', e.target.value)} /></label>
+            <label className="f" style={{ margin: 0, flex: '1 1 110px' }}><span>Type</span>
+              <select value={p.kind || 'hours'} onChange={e => updatePlan(i, 'kind', e.target.value)}>
+                <option value="hours">Hours</option><option value="visits">Visits</option>
+              </select></label>
+            <label className="f" style={{ margin: 0 }}><span>Price ₹</span>
+              <input type="number" value={p.price} onChange={e => updatePlan(i, 'price', e.target.value)} /></label>
+            {(p.kind || 'hours') === 'visits'
+              ? <label className="f" style={{ margin: 0 }}><span>Visits (0 = unlimited)</span>
+                <input type="number" min="0" value={p.visits || 0} onChange={e => updatePlan(i, 'visits', e.target.value)} /></label>
+              : <label className="f" style={{ margin: 0 }}><span>Hours (0 = unlimited)</span>
+                <input type="number" value={p.hours} onChange={e => updatePlan(i, 'hours', e.target.value)} /></label>}
+            <label className="f" style={{ margin: 0 }}><span>Days (0 = lifetime)</span>
+              <input type="number" min="0" value={p.days} onChange={e => updatePlan(i, 'days', e.target.value)} /></label>
+            <label className="f" style={{ margin: 0, flex: '1 1 80px' }}><span>Food disc %</span>
+              <input type="number" min="0" max="100" value={p.discountPercent || 0} onChange={e => updatePlan(i, 'discountPercent', e.target.value)} /></label>
             <button className="btn sm danger" style={{ flex: '0 0 auto' }} onClick={() => delPlan(i)}>✕</button>
           </div>
         ))}
-        <button className="btn sm" style={{ marginTop: 10 }} onClick={addPlan}>+ Add plan</button>
-        <p className="hint" style={{ margin: '10px 0 0' }}>Hours = 0 rakhein to unlimited plan ban jayega. Disc % = 0 rakhein toh Shop card wala default member discount lagega.</p>
+        <div className="row" style={{ marginTop: 10 }}>
+          <button className="btn sm" style={{ flex: '0 0 auto' }} onClick={addPlan}>+ Add plan</button>
+          <button className="btn sm" style={{ flex: '0 0 auto' }} onClick={addVisitPasses}>+ Menu card ke visit passes (10 / 20 / 50 / Unlimited)</button>
+        </div>
+        <p className="hint" style={{ margin: '10px 0 0' }}>Type "Visits": har baar member ke bachche ke khelne par 1 visit katti hai (number se verify hoke). Visits = 0 = unlimited. Days = 0 = lifetime, kabhi expire nahi. Hours = 0 = unlimited hours. Disc % = 0 rakhein toh Shop card wala default member discount lagega. Save karna na bhoolein.</p>
       </div></div>
 
       <div className="card"><div className="hd"><h2>Loyalty points</h2></div><div className="bd">

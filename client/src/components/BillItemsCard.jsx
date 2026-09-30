@@ -18,7 +18,9 @@ export default function BillItemsCard({ items, removeItem, discount, setDiscount
             <span className={'dot d-' + i.cat}></span>
             <span className="nm">
               <b>{i.name}</b>
-              <small>{i.cat === 'play'
+              <small>{i.cat === 'play' && i.meta && i.meta.visitCharged
+                ? `${i.meta.kids} kid${i.meta.kids > 1 ? 's' : ''} · ${i.meta.planName || 'membership'} · visit kat chuki`
+                : i.cat === 'play'
                 ? `${i.meta.minutes} min × ${i.meta.kids} kid${i.meta.kids > 1 ? 's' : ''}${i.meta.member ? ' · membership' : ' · ' + INR(i.rate) + '/kid'}`
                 : `${i.qty} × ${INR(i.rate)}`}</small>
               {i.meta && i.meta.note && <small style={{ color: 'var(--berry)' }}>» {i.meta.note}</small>}

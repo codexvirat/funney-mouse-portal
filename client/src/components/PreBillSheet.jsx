@@ -61,7 +61,7 @@ export default function PreBillSheet({ open, bill, config, onEdit, onPay }) {
       </div>
       <ul className="items" style={{ marginBottom: 12 }}>
         {bill.items.map((i, ix) => (
-          <li key={ix}><span className="nm"><b>{i.name}</b><small>{i.cat === 'play' && i.meta ? `${i.meta.minutes} min × ${i.meta.kids}` : `${i.qty} × ${INR(i.rate)}`}</small></span><span className="amt">{INR(i.amount)}</span></li>
+          <li key={ix}><span className="nm"><b>{i.name}</b><small>{i.cat === 'play' && i.meta && i.meta.visitCharged ? `${i.meta.kids} kid · membership visit` : i.cat === 'play' && i.meta ? `${i.meta.minutes} min × ${i.meta.kids}` : `${i.qty} × ${INR(i.rate)}`}</small></span><span className="amt">{INR(i.amount)}</span></li>
         ))}
       </ul>
       <div className="row">

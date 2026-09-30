@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from './context/AuthContext';
 import LoginPage from './pages/LoginPage';
 import TopBar from './components/TopBar';
@@ -13,6 +13,7 @@ import SetupPage from './pages/SetupPage';
 import KitchenPage from './pages/KitchenPage';
 import CashPage from './pages/CashPage';
 import AuditPage from './pages/AuditPage';
+import GuestStartSheet from './components/GuestStartSheet';
 import PartyPage from './pages/PartyPage';
 import BillsPage from './pages/BillsPage';
 
@@ -23,6 +24,10 @@ export default function App() {
   const [view, setView] = useState('tables');
   const [billIntent, setBillIntent] = useState(null);
   const [custQuery, setCustQuery] = useState('');
+  // "Kaun aaya hai?" popup — shows as soon as the site opens.
+  const [guestPopup, setGuestPopup] = useState(true);
+  const [focusOrder, setFocusOrder] = useState(null);
+  const clearFocus = useCallback(() => setFocusOrder(null), []);
 
   useEffect(() => {
     document.body.style.paddingBottom = view === 'bill' || view === 'tables' ? '120px' : '40px';
@@ -62,7 +67,7 @@ export default function App() {
         <Tabs view={view} setView={goView} />
       </div>
       <main className="wrap">
-        {view === 'tables' && <TablesPage />}
+        {view === 'tables' && <TablesPage focusOrder={focusOrder} onFocused={clearFocus} onNewGuest={() => setGuestPopup(true)} />}
         {view === 'bill' && <BillPage billIntent={billIntent} onConsumeIntent={() => setBillIntent(null)} />}
         {view === 'bills' && <BillsPage />}
         {view === 'party' && <PartyPage />}
@@ -73,6 +78,10 @@ export default function App() {
         {view === 'cust' && isAdmin && <CustomersPage initialQuery={custQuery} onBillThis={billThisCustomer} onMemThis={startMembership} />}
         {view === 'setup' && isAdmin && <SetupPage />}
       </main>
+      <GuestStartSheet open={guestPopup} onClose={() => setGuestPopup(false)}
+        onMemberOpened={(order) => { setGuestPopup(false); setFocusOrder(order); setView('tables'); }}
+        onNonMember={() => { setGuestPopup(false); setView('tables'); }}
+        onParty={() => { setGuestPopup(false); setView('party'); }} />
       <PrintArea />
     </>
   );

@@ -5,7 +5,7 @@ const Counter = require('../models/Counter');
 const Config = require('../models/Config');
 const Booking = require('../models/Booking');
 const { dstr, addDays } = require('../utils/date');
-const { memberActive } = require('../utils/member');
+const { memberActive, memberVisitsUsed } = require('../utils/member');
 const { inTimeWindow, nowHHMM } = require('../utils/time');
 const { audit } = require('../utils/audit');
 const { requireApproval } = require('../utils/approval');
@@ -158,6 +158,24 @@ async function finalizeBill({ phone, name, kid, kidDob, anniversary, items, disc
     throw err;
   }
 
+  // Membership play on a visit pass: the member must be verified by their
+  // number (customer on the bill) and have enough visits left.
+  const visitsNeeded = memberVisitsUsed(itemsClean);
+  if (visitsNeeded && !itemsClean.some(i => i.cat === 'member')) {
+    const m = customer && customer.membership;
+    if (!m || !memberActive(customer)) {
+      const over = m && m.kind === 'visits' && m.visits > 0 && (m.visitsLeft || 0) <= 0;
+      const err = new Error(over ? `${m.planName} ke saare visits use ho chuke hain — pass renew karein` : 'Membership active nahi hai — member ka number check karein');
+      err.status = 400;
+      throw err;
+    }
+    if (m.kind === 'visits' && m.visits > 0 && (m.visitsLeft || 0) < visitsNeeded) {
+      const err = new Error(`Membership me sirf ${m.visitsLeft || 0} visit bache hain, ${visitsNeeded} chahiye`);
+      err.status = 400;
+      throw err;
+    }
+  }
+
   const date = dstr();
   const no = await nextBillNo(date);
   const kids = itemsClean.filter(i => i.cat === 'play').reduce((a, i) => a + (i.meta && i.meta.kids || 0), 0);
@@ -181,24 +199,36 @@ async function finalizeBill({ phone, name, kid, kidDob, anniversary, items, disc
     const plan = itemsClean.find(i => i.cat === 'member');
     if (plan && plan.meta) {
       const old = customer.membership;
-      const activeOld = !!(old && (!old.expiresAt || dstr() <= old.expiresAt) && !(old.hours > 0 && (old.hoursLeft || 0) <= 0));
+      const activeOld = !!(old && memberActive({ membership: old }));
       const stack = activeOld && old.planId === plan.refId;
-      const planHours = Number(plan.meta.hours) || 0;
+      const kind = plan.meta.kind === 'visits' ? 'visits' : 'hours';
+      const planHours = kind === 'hours' ? Number(plan.meta.hours) || 0 : 0;
+      const planVisits = kind === 'visits' ? Number(plan.meta.visits) || 0 : 0;
       const planDays = Number(plan.meta.days) || 0;
       const base = stack && old.expiresAt > date ? old.expiresAt : date;
       customer.membership = {
         planId: plan.refId,
         planName: plan.meta.planName,
+        kind,
         hours: planHours,
         hoursLeft: (stack && planHours > 0 ? (old.hoursLeft || 0) : 0) + planHours,
+        // Renewing the same visit pass adds its visits to what's left.
+        visits: planVisits > 0 ? (stack ? (old.visits || 0) : 0) + planVisits : 0,
+        visitsLeft: planVisits > 0 ? (stack ? (old.visitsLeft || 0) : 0) + planVisits : 0,
+        visitsUsed: stack ? (old.visitsUsed || 0) : 0,
         startedAt: stack ? (old.startedAt || date) : date,
-        expiresAt: addDays(base, planDays),
+        // days 0 = lifetime pass, never expires.
+        expiresAt: planDays > 0 ? addDays(base, planDays) : '',
         renewals: stack ? (old.renewals || 0) + 1 : 0
       };
     }
 
     const used = itemsClean.filter(i => i.cat === 'play' && i.meta && i.meta.member);
-    if (used.length && customer.membership && customer.membership.hours > 0) {
+    if (used.length && customer.membership && customer.membership.kind === 'visits') {
+      const n = memberVisitsUsed(itemsClean);
+      customer.membership.visitsUsed = (customer.membership.visitsUsed || 0) + n;
+      if (customer.membership.visits > 0) customer.membership.visitsLeft = Math.max(0, (customer.membership.visitsLeft || 0) - n);
+    } else if (used.length && customer.membership && customer.membership.hours > 0) {
       const hrs = used.reduce((a, i) => a + (i.meta.minutes / 60) * i.meta.kids, 0);
       customer.membership.hoursLeft = Math.max(0, Math.round(((customer.membership.hoursLeft || 0) - hrs) * 100) / 100);
     }
@@ -389,6 +419,20 @@ exports.voidBill = asyncHandler(async (req, res) => {
       customer.totalSpend = Math.max(0, (customer.totalSpend || 0) - bill.total);
       customer.recent = (customer.recent || []).filter(r => r.billId !== String(bill._id));
       customer.points = Math.max(0, (customer.points || 0) + (bill.pointsRedeemed || 0) - (bill.pointsEarned || 0));
+      // Give back the visits / hours this bill's membership play used.
+      const m = customer.membership;
+      const usedPlay = bill.items.filter(i => i.cat === 'play' && i.meta && i.meta.member);
+      if (m && usedPlay.length && !bill.items.some(i => i.cat === 'member')) {
+        if (m.kind === 'visits') {
+          const n = memberVisitsUsed(bill.items, true);
+          m.visitsUsed = Math.max(0, (m.visitsUsed || 0) - n);
+          if (m.visits > 0) m.visitsLeft = Math.min(m.visits, (m.visitsLeft || 0) + n);
+        } else if (m.hours > 0) {
+          const hrs = usedPlay.reduce((a, i) => a + (i.meta.minutes / 60) * i.meta.kids, 0);
+          m.hoursLeft = Math.min(m.hours, Math.round(((m.hoursLeft || 0) + hrs) * 100) / 100);
+        }
+        customer.markModified('membership');
+      }
       const sold = bill.items.find(i => i.cat === 'member');
       if (sold && customer.membership && customer.membership.startedAt === bill.date) {
         if ((customer.membership.renewals || 0) > 0) {
