@@ -39,7 +39,9 @@ const pct = (v) => (Number(v) || 0).toString().replace(/\.0+$/, '');
 // Thermal (80mm) bill in the usual restaurant format: shop header, bill
 // details, Item/Qty/Price/Amount table, taxes, big grand total. Sizes live
 // in theme.css under @media print (.rc-*).
-function receiptHTML(b, config, customer) {
+// `b.provisional` = the bill printed before payment (nothing saved yet):
+// same layout, marked PAYMENT PENDING, no bill number and no payment line.
+export function receiptHTML(b, config, customer) {
   const cfg = config || {};
   const shopName = cfg.shopName || 'Funny Mouse';
   const lines = (txt) => String(txt || '').split('\n').map(l => l.trim()).filter(Boolean);
@@ -66,11 +68,12 @@ function receiptHTML(b, config, customer) {
     <div class="rc-shop">${esc(shopName)}</div>
     ${head.map(l => `<div class="rc-c">${l}</div>`).join('')}
     <div class="rc-line"></div>
+    ${b.provisional ? '<div class="rc-c"><b>BILL — PAYMENT PENDING</b></div><div class="rc-line thin"></div>' : ''}
     <div>Name: ${esc(b.name && b.name !== 'Walk-in' ? b.name : '')}${b.phone ? ' (' + esc(b.phone) + ')' : ''}</div>
     <div class="rc-line thin"></div>
     <table class="rc-meta">
       <tr><td>Date: ${shortDate(b.date)} ${tstr(b.ts)}</td><td class="rt"><b>${b.tableName ? 'Dine In: ' + esc(b.tableName) : 'Counter'}</b></td></tr>
-      <tr><td>Cashier: ${esc(b.staff || '')}</td><td class="rt">Bill No.: <b>${b.no}</b></td></tr>
+      <tr><td>Cashier: ${esc(b.staff || '')}</td><td class="rt">Bill No.: <b>${b.provisional ? '—' : b.no}</b></td></tr>
     </table>
     <div class="rc-line"></div>
     <table class="rc-items">
@@ -96,6 +99,7 @@ function receiptHTML(b, config, customer) {
     <div class="rc-line"></div>
     ${pays ? `<div class="rc-c">Paid: ${pays}</div>` : ''}
     ${b.advance > 0 ? `<div class="rc-c">Advance pehle mila: ${INR(b.advance)} (${esc(b.advanceMode)})</div>` : ''}
+    ${b.provisional && b.advance > 0 ? `<div class="rc-c"><b>Baaki dena: ${INR(Math.max(0, grand - b.advance))}</b></div>` : ''}
     ${b.pointsEarned ? `<div class="rc-c">Is bill se ${b.pointsEarned} loyalty points mile${customer && customer.points != null ? ` · total ${customer.points}` : ''}</div>` : ''}
     ${footer.length ? `<div class="rc-foot">${footer.map(esc).join('<br>')}</div>` : ''}
   </div>`;

@@ -19,6 +19,7 @@ import MemberPanel from '../components/MemberPanel';
 import BillItemsCard from '../components/BillItemsCard';
 import PayBar from '../components/PayBar';
 import PaymentSheet from '../components/PaymentSheet';
+import PreBillSheet, { draftBill } from '../components/PreBillSheet';
 import ReceiptSheet from '../components/ReceiptSheet';
 import Sheet from '../components/Sheet';
 import SplitSheet from '../components/SplitSheet';
@@ -34,7 +35,7 @@ const CATS = [
 // TableOrder so it survives refresh/another device — unlike BillPage's
 // quick-bill flow, which only ever keeps one draft in local React state.
 export default function TableDetailPage({ order, config, freeTables, otherOrders, onSyncOrder, onBack, onClosed, onTransferred, onMerged }) {
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
   const toast = useToast();
 
   const [phone, setPhone] = useState(order.phone || '');
@@ -58,7 +59,7 @@ export default function TableDetailPage({ order, config, freeTables, otherOrders
   const [adults, setAdults] = useState(order.adults || 0);
   const [kidCount, setKidCount] = useState(order.kids || 0);
 
-  const [sheet, setSheet] = useState(null); // 'pay' | 'receipt' | 'transfer' | 'merge' | 'split' | 'splitpay' | null
+  const [sheet, setSheet] = useState(null); // 'prebill' | 'pay' | 'receipt' | 'transfer' | 'merge' | 'split' | 'splitpay' | null
   const [split, setSplit] = useState(null); // { picks, picked, phone, name, total }
   const [tableClosed, setTableClosed] = useState(true);
   const [lastBill, setLastBill] = useState(null);
@@ -481,9 +482,13 @@ export default function TableDetailPage({ order, config, freeTables, otherOrders
         </div>
       </div>
 
-      <PayBar itemsCount={items.length} kids={kidsOnBill(items)} total={total} onClear={clearBill} onPay={() => setSheet('pay')} onSplit={() => setSheet('split')} />
+      <PayBar itemsCount={items.length} kids={kidsOnBill(items)} total={total} onClear={clearBill} onPay={() => setSheet('prebill')} onSplit={() => setSheet('split')} />
 
-      <PaymentSheet open={sheet === 'pay'} total={total} onClose={() => setSheet(null)} onSave={onSaveBill} initialPay={initialPay} initialNote={initialNote} />
+      <PreBillSheet open={sheet === 'prebill'} config={config} onEdit={() => setSheet(null)} onPay={() => setSheet('pay')}
+        bill={sheet === 'prebill' || sheet === 'pay' ? draftBill({ items, sub, disc, autoDiscount, total, serviceCharge, serviceChargeType,
+          name: (cust && cust.name) || order.name, phone: (cust && cust.phone) || phone, tableName: order.tableName, staff: user && user.username,
+          advance: order.advance, advanceMode: order.advanceMode }) : null} />
+      <PaymentSheet open={sheet === 'pay'} total={total} onClose={() => setSheet('prebill')} onSave={onSaveBill} initialPay={initialPay} initialNote={initialNote} />
       <SplitSheet open={sheet === 'split'} items={items} onClose={() => setSheet(null)} onNext={startSplitPay} />
       <PaymentSheet open={sheet === 'splitpay'} total={split ? split.total : 0} onClose={() => setSheet('split')} onSave={onSaveSplit}
         initialPay={splitAdvance ? { [order.advanceMode || 'CASH']: splitAdvance } : undefined}
