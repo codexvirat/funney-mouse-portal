@@ -13,6 +13,8 @@ router.get('/advance-summary', protect, allowRoles('admin', 'owner'), ctrl.advan
 router.post('/', protect, floor, ctrl.createBooking);
 router.patch('/:id', protect, floor, ctrl.updateBooking);
 router.post('/:id/assign-tables', protect, floor, ctrl.assignTables);
+router.post('/:id/final-bill', protect, floor, ctrl.finalBill);
+router.put('/:id/extras', protect, floor, ctrl.setExtras);
 router.delete('/:id', protect, floor, ctrl.deleteBooking);
 
 module.exports = router;

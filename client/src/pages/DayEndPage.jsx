@@ -6,11 +6,14 @@ import { rollup } from '../utils/report';
 import { exportCSV } from '../utils/csv';
 import ReportBreakdown from '../components/ReportBreakdown';
 import TableBreakdown from '../components/TableBreakdown';
-import EditBillSheet from '../components/EditBillSheet';
+import BillFixSheets from '../components/BillFixSheets';
 import ProfitCard from '../components/ProfitCard';
 import AdvanceCard from '../components/AdvanceCard';
 
 function DayReport({ date, bills, t, expenses, onVoid, onSettle, onEdit }) {
+  const [showDeleted, setShowDeleted] = useState(false);
+  const deletedCount = bills.filter(b => b.void).length;
+  const listed = showDeleted ? bills : bills.filter(b => !b.void);
   return (
     <>
       <div className="hero"><small>{prettyDate(date)}</small><b>{INR(t.total)}</b>
@@ -23,28 +26,30 @@ function DayReport({ date, bills, t, expenses, onVoid, onSettle, onEdit }) {
       <TableBreakdown bills={bills} />
       <div className="card">
         <div className="hd"><h2>Bills</h2><div className="spacer"></div>
+          {deletedCount > 0 && <button className="btn sm ghost" onClick={() => setShowDeleted(v => !v)}>{showDeleted ? 'Deleted chhupayein' : `Deleted (${deletedCount}) dikhayein`}</button>}
           <button className="btn sm" onClick={() => exportCSV(bills, date)}>Export CSV</button></div>
         <div className="bd scrollx">
-          {bills.length ? (
+          {listed.length ? (
             <table className="tb">
               <thead><tr><th>#</th><th>Time</th><th>Customer</th><th>Items</th><th style={{ textAlign: 'right' }}>Total</th><th>Mode</th><th></th></tr></thead>
               <tbody>
-                {bills.map(b => (
+                {listed.map(b => (
                   <tr key={b._id} className={b.void ? 'void' : ''}>
                     <td>{b.no}</td><td>{tstr(b.ts)}</td>
                     <td>{b.name || 'Walk-in'}{b.phone ? <><br /><span className="hint">{b.phone}</span></> : null}
                       {b.advance > 0 && <><br /><span className="hint">Advance {INR(b.advance)}</span></>}
                       {b.tableName ? <><br /><span className="hint">{b.tableName}</span></> : null}
-                      {b.editedAt && <><br /><span className="hint">Edited</span></>}</td>
+                      {b.editedAt && <><br /><span className="hint">Edited{b.editReason ? ': ' + b.editReason : ''}</span></>}
+                      {b.void && <><br /><span className="hint">Deleted: {b.voidReason || '—'}</span></>}</td>
                     <td>{b.items.map((i, ix) => (<span key={ix}>{i.name}{i.qty > 1 ? ' ×' + i.qty : ''}<br /></span>))}</td>
                     <td style={{ textAlign: 'right' }}><b className="num">{INR(b.total)}</b></td>
                     <td>{Object.entries(b.pay).filter(([, v]) => v > 0).map(([k, v]) => (<span key={k}>{k} {INR(v)}<br /></span>))}</td>
                     <td style={{ whiteSpace: 'nowrap' }}>
-                      {b.void ? <span className="hint">Void</span> : (
+                      {b.void ? <span className="hint">Deleted</span> : (
                         <>
                           {b.pay.DUE > 0 && <button className="btn sm" onClick={() => onSettle(b)}>Due paid</button>}{' '}
                           <button className="btn sm ghost" onClick={() => onEdit(b)}>Edit</button>{' '}
-                          <button className="btn sm ghost" onClick={() => onVoid(b)}>Void</button>
+                          <button className="btn sm ghost danger" onClick={() => onVoid(b)}>Delete</button>
                         </>
                       )}
                     </td>
@@ -97,7 +102,7 @@ export default function DayEndPage() {
   const [month, setMonth] = useState(dstr().slice(0, 7));
   const [bills, setBills] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState(null);
+  const [fix, setFix] = useState(null);
   const [expenses, setExpenses] = useState(null);
 
   const load = async () => {
@@ -117,11 +122,6 @@ export default function DayEndPage() {
 
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [mode, date, month]);
 
-  const voidBill = async (b) => {
-    if (!window.confirm('Ye bill void kar dein? Sale total se hat jayegi.')) return;
-    const reason = window.prompt('Reason (optional)') || '';
-    try { await api.patch(`/bills/${b._id}/void`, { reason }); load(); } catch (e) { alert('Void nahi ho paya'); }
-  };
   const settleDue = async (b) => {
     const modeIn = window.prompt('Due kis mode me mila? UPI / CASH / CARD', 'UPI');
     if (!modeIn) return;
@@ -149,11 +149,10 @@ export default function DayEndPage() {
       </div></div>
 
       {loading ? <p className="hint">Loading…</p> : mode === 'day'
-        ? <DayReport date={date} bills={bills} t={t} expenses={expenses} onVoid={voidBill} onSettle={settleDue} onEdit={setEditing} />
+        ? <DayReport date={date} bills={bills} t={t} expenses={expenses} onVoid={b => setFix({ bill: b, action: 'void' })} onSettle={settleDue} onEdit={b => setFix({ bill: b, action: 'edit' })} />
         : <MonthReport month={month} bills={bills} t={t} expenses={expenses} />}
 
-      <EditBillSheet open={!!editing} bill={editing} onClose={() => setEditing(null)}
-        onSaved={() => { setEditing(null); load(); }} />
+      <BillFixSheets target={fix} onClose={() => setFix(null)} onDone={() => { setFix(null); load(); }} />
     </>
   );
 }

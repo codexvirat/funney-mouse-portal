@@ -48,8 +48,12 @@ const saleSchema = new mongoose.Schema({
   void: { type: Boolean, default: false },
   voidReason: { type: String, default: '' },
   voidAt: { type: String, default: '' },
+  voidBy: { type: String, default: '' },
   dueSettledAt: { type: String, default: '' },
-  editedAt: { type: String, default: '' }
+  editedAt: { type: String, default: '' },
+  editReason: { type: String, default: '' },
+  editedBy: { type: String, default: '' },
+  editCount: { type: Number, default: 0 }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Sale', saleSchema);

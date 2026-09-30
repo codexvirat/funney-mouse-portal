@@ -8,7 +8,9 @@ const SECTIONS = [
   { cat: 'food', label: 'Food' },
   { cat: 'play', label: 'Play area' },
   { cat: 'socks', label: 'Socks' },
-  { cat: 'member', label: 'Membership' }
+  { cat: 'member', label: 'Membership' },
+  { cat: 'partyplay', label: 'Party — Play' },
+  { cat: 'party', label: 'Party — Food' }
 ];
 
 function sectionRows(items) {

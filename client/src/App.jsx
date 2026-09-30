@@ -13,8 +13,10 @@ import SetupPage from './pages/SetupPage';
 import KitchenPage from './pages/KitchenPage';
 import CashPage from './pages/CashPage';
 import AuditPage from './pages/AuditPage';
+import PartyPage from './pages/PartyPage';
+import BillsPage from './pages/BillsPage';
 
-const STAFF_VIEWS = ['tables', 'bill', 'cash'];
+const STAFF_VIEWS = ['tables', 'bill', 'bills', 'party', 'cash'];
 
 export default function App() {
   const { user, ready, isAdmin } = useAuth();
@@ -60,6 +62,8 @@ export default function App() {
       <main className="wrap">
         {view === 'tables' && <TablesPage />}
         {view === 'bill' && <BillPage billIntent={billIntent} onConsumeIntent={() => setBillIntent(null)} />}
+        {view === 'bills' && <BillsPage />}
+        {view === 'party' && <PartyPage />}
         {view === 'cash' && <CashPage />}
         {view === 'day' && isAdmin && <DayEndPage />}
         {view === 'log' && isAdmin && <AuditPage />}

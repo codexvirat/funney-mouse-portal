@@ -1,5 +1,6 @@
 :root{
-  --bg:#F1F0F7; --surface:#FFFFFF; --surface-2:#F7F6FB; --text:#1A1524; --muted:#6C6580;
+  color-scheme:light;
+  --bg:#FFFFFF; --surface:#FFFFFF; --surface-2:#F7F6FB; --text:#1A1524; --muted:#6C6580;
   --line:#E2DEEE; --line-2:#CFC9E2;
   --accent:#FFC53D; --accent-ink:#2B2100; --accent-soft:#FFF3D2;
   --grape:#6B4EFF; --grape-soft:#EDE9FF;
@@ -9,29 +10,6 @@
   --danger:#C42B3E;
   --shadow:0 1px 0 var(--line), 0 8px 24px -18px rgba(30,20,60,.5);
   --r:14px;
-}
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    --bg:#13111B; --surface:#1D1A27; --surface-2:#242031; --text:#F0EDF7; --muted:#9E97B2;
-    --line:#2E2940; --line-2:#3D3654;
-    --accent:#FFC53D; --accent-ink:#2B2100; --accent-soft:#3A2F10;
-    --grape:#9A85FF; --grape-soft:#2A2350;
-    --berry:#FF7189; --berry-soft:#45202A;
-    --mint:#4CD2A7; --mint-soft:#10382E;
-    --sky:#6FB3F2; --sky-soft:#12283D;
-    --danger:#FF7A8A;
-    --shadow:0 1px 0 var(--line), 0 8px 24px -18px rgba(0,0,0,.8);
-  }
-}
-:root[data-theme="dark"]{
-  --bg:#13111B; --surface:#1D1A27; --surface-2:#242031; --text:#F0EDF7; --muted:#9E97B2;
-  --line:#2E2940; --line-2:#3D3654;
-  --accent:#FFC53D; --accent-ink:#2B2100; --accent-soft:#3A2F10;
-  --grape:#9A85FF; --grape-soft:#2A2350;
-  --berry:#FF7189; --berry-soft:#45202A;
-  --mint:#4CD2A7; --mint-soft:#10382E;
-  --sky:#6FB3F2; --sky-soft:#12283D;
-  --danger:#FF7A8A;
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
@@ -138,7 +116,7 @@ input::placeholder{color:color-mix(in srgb,var(--muted) 70%,transparent)}
 .items .nm small{display:block;color:var(--muted);font-size:12.5px}
 .items .amt{font-family:"Bricolage Grotesque";font-weight:700;min-width:72px;text-align:right}
 .dot{width:8px;height:8px;border-radius:3px;flex:none}
-.d-play{background:var(--grape)} .d-food{background:var(--berry)} .d-socks{background:var(--mint)} .d-member{background:var(--accent)}
+.d-play{background:var(--grape)} .d-food{background:var(--berry)} .d-socks{background:var(--mint)} .d-member{background:var(--accent)} .d-party{background:var(--sky)} .d-partyplay{background:var(--grape)}
 
 /* paybar */
 .paybar{position:fixed;left:0;right:0;bottom:0;z-index:35;background:var(--surface);border-top:1px solid var(--line-2);padding:10px 0 calc(10px + env(safe-area-inset-bottom))}
@@ -217,6 +195,10 @@ table.tb tr.void td{opacity:.45;text-decoration:line-through}
 .calmark{display:block;font-size:10px;line-height:1.1;margin-top:1px;white-space:nowrap}
 .cald i{position:absolute;top:-6px;right:-4px;font-style:normal;font-size:10px;background:var(--berry);color:#fff;border-radius:99px;min-width:16px;height:16px;line-height:16px}
 
+/* party booking form */
+.pfsec{border-top:1px solid var(--line);padding-top:12px;margin-top:4px}
+.pfsec>h3{margin:0 0 10px;font-size:14px;font-weight:700;letter-spacing:-.01em}
+
 /* login */
 .loginWrap{min-height:100vh;display:grid;place-items:center;padding:20px}
 .loginCard{width:100%;max-width:360px;padding:26px 22px}
@@ -248,6 +230,20 @@ table.tb tr.void td{opacity:.45;text-decoration:line-through}
   #printarea td{padding:2px 0}
   #printarea .rt{text-align:right}
   #printarea hr{border:0;border-top:1px dashed #000;margin:6px 0}
+  /* A4 party booking form */
+  #printarea.a4{width:auto;max-width:190mm;padding:10mm 10mm;font-size:12px;line-height:1.35}
+  #printarea.a4 .pf-hd{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #000;padding-bottom:4px;margin-bottom:6px}
+  #printarea.a4 .pf-hd b{font-size:22px}
+  #printarea.a4 .pf-hd span{font-size:14px;font-weight:700}
+  #printarea.a4 .pf-grid>tbody>tr>td{width:50%;vertical-align:top;padding:0 4px 0 0}
+  #printarea.a4 .pf-kv th{text-align:left;font-weight:700;width:34%;padding:3px 6px 3px 0;border-bottom:1px solid #999;vertical-align:top}
+  #printarea.a4 .pf-kv td{padding:3px 0;border-bottom:1px solid #999}
+  #printarea.a4 .pf-sub{font-weight:800;font-size:13px;margin:10px 0 4px;border-bottom:2px solid #000}
+  #printarea.a4 .pf-est th,#printarea.a4 .pf-est td{border:1px solid #000;padding:3px 6px;text-align:left}
+  #printarea.a4 .pf-est .rt{text-align:right}
+  #printarea.a4 .pf-tot td{font-weight:800;font-size:14px}
+  #printarea.a4 .pf-note{font-size:11px;font-weight:700;margin:10px 0}
+  #printarea.a4 .pf-sign td{padding-top:30px;width:50%}
 }
 @media (max-width:520px){
   .grid2{grid-template-columns:1fr}

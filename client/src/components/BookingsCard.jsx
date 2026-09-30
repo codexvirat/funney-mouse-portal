@@ -11,6 +11,17 @@ import MonthCalendar from './MonthCalendar';
 
 const PAY_MODES = ['CASH', 'UPI', 'CARD'];
 
+// Fewest tables (in Setup order) whose seats cover the guests.
+function suggestTables(guests, tables) {
+  let seats = 0, count = 0;
+  for (const t of tables || []) {
+    if (seats >= guests) break;
+    seats += Number(t.capacity) || 0;
+    count++;
+  }
+  return Math.max(1, count);
+}
+
 function balanceOf(b) {
   return b.estimate > 0 ? Math.max(0, b.estimate - (b.advance || 0)) : 0;
 }
@@ -231,7 +242,8 @@ export default function BookingsCard({ tables, freeTables, onUseBooking, onAssig
   const load = useCallback(async () => {
     try {
       const { data } = await api.get('/bookings', { params: { status: 'pending' } });
-      setBookings(data.bookings);
+      // Party-form bookings live in the Party booking tab and never take a table.
+      setBookings(data.bookings.filter(b => !b.party));
     } catch (e) { /* ignore transient poll errors */ }
   }, []);
 
@@ -250,7 +262,7 @@ export default function BookingsCard({ tables, freeTables, onUseBooking, onAssig
 
   return (
     <div className="card">
-      <div className="hd"><h2>Advance bookings</h2><div className="spacer"></div>
+      <div className="hd" style={{ flexWrap: 'wrap' }}><h2>Advance bookings</h2><div className="spacer"></div>
         {bookings.length > 0 && (
           <div className="seg" style={{ width: 'auto' }}>
             <button aria-pressed={view === 'list'} onClick={() => { setView('list'); setDayFilter(null); }}>List</button>
@@ -258,6 +270,7 @@ export default function BookingsCard({ tables, freeTables, onUseBooking, onAssig
           </div>
         )}
         <button className="btn sm" onClick={() => setSheetOpen(true)}>+ New booking</button>
+
       </div>
       <div className="bd">
         {!bookings.length && <p className="hint" style={{ margin: 0 }}>Koi pending booking nahi hai.</p>}

@@ -3,10 +3,12 @@ const Sale = require('../models/Sale');
 const Customer = require('../models/Customer');
 const Counter = require('../models/Counter');
 const Config = require('../models/Config');
+const Booking = require('../models/Booking');
 const { dstr, addDays } = require('../utils/date');
 const { memberActive } = require('../utils/member');
 const { inTimeWindow, nowHHMM } = require('../utils/time');
 const { audit } = require('../utils/audit');
+const { requireApproval } = require('../utils/approval');
 
 async function nextBillNo(date) {
   const c = await Counter.findByIdAndUpdate(date, { $inc: { seq: 1 } }, { new: true, upsert: true });
@@ -280,8 +282,9 @@ exports.editBill = asyncHandler(async (req, res) => {
   const hasMembership = bill.items.some(i => i.cat === 'member' || (i.meta && i.meta.member));
   if (hasMembership) {
     res.status(400);
-    throw new Error('Membership wale bill edit nahi ho sakte — void karke naya bill banayein');
+    throw new Error('Membership wale bill edit nahi ho sakte — delete karke naya bill banayein');
   }
+  const approval = await requireApproval(req, res);
 
   const { items, discount, discountType, pay } = req.body;
   // Not sent -> keep the bill's own service charge (same % re-applied, or
@@ -329,6 +332,9 @@ exports.editBill = asyncHandler(async (req, res) => {
   bill.pay = payClean;
   bill.kids = kids;
   bill.editedAt = new Date().toISOString();
+  bill.editReason = approval.reason;
+  bill.editedBy = approval.approvedBy;
+  bill.editCount = (bill.editCount || 0) + 1;
   await bill.save();
 
   if (bill.phone) {
@@ -340,8 +346,15 @@ exports.editBill = asyncHandler(async (req, res) => {
     }
   }
 
-  await audit(req.user, 'Bill edited', `Bill #${bill.no} (${bill.date}) — total ₹${oldTotal} → ₹${total}`, bill._id);
+  await audit(req.user, 'Bill edited', `Bill #${bill.no} (${bill.date}) — total ₹${oldTotal} → ₹${total} — ${approval.reason} (approved: ${approval.approvedBy})`, bill._id);
   res.json({ bill });
+});
+
+// Lets the UI check reason + password before opening the edit screen, so a
+// wrong password isn't discovered only after the bill has been re-done.
+exports.verifyApproval = asyncHandler(async (req, res) => {
+  const { approvedBy } = await requireApproval(req, res);
+  res.json({ ok: true, approvedBy });
 });
 
 exports.voidBill = asyncHandler(async (req, res) => {
@@ -352,11 +365,21 @@ exports.voidBill = asyncHandler(async (req, res) => {
   }
   if (bill.void) return res.json({ bill, warning: null });
 
-  const { reason } = req.body;
+  const approval = await requireApproval(req, res);
   bill.void = true;
-  bill.voidReason = reason || '';
+  bill.voidReason = approval.reason;
+  bill.voidBy = approval.approvedBy;
   bill.voidAt = new Date().toISOString();
   await bill.save();
+
+  // A deleted party bill puts its booking back to Upcoming so the party can
+  // be billed again. ('play'/'food' are from the short-lived two-bill setup.)
+  if (bill.bookingId) {
+    for (const part of ['main', 'play', 'food']) {
+      await Booking.updateOne({ _id: bill.bookingId, [`bills.${part}.id`]: String(bill._id) },
+        { $set: { status: 'pending' }, $unset: { [`bills.${part}`]: 1 } });
+    }
+  }
 
   let warning = null;
   if (bill.phone) {
@@ -377,7 +400,7 @@ exports.voidBill = asyncHandler(async (req, res) => {
       await customer.save();
     }
   }
-  await audit(req.user, 'Bill void', `Bill #${bill.no} (${bill.date}) ₹${bill.total}${bill.voidReason ? ' — ' + bill.voidReason : ''}`, bill._id);
+  await audit(req.user, 'Bill void', `Bill #${bill.no} (${bill.date}) ₹${bill.total} — ${bill.voidReason} (approved: ${bill.voidBy})`, bill._id);
   res.json({ bill, warning });
 });
 

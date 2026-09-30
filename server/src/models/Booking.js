@@ -13,10 +13,16 @@ const bookingSchema = new mongoose.Schema({
   advanceMode: { type: String, default: 'CASH' },
   estimate: { type: Number, default: 0 },
   note: { type: String, default: '' },
+  // Full "Party Booking Form" + estimate calculation (child, parents, theme,
+  // food MG, play package, add-ons, payment plan). Null for quick bookings.
+  party: { type: mongoose.Schema.Types.Mixed, default: null },
   status: { type: String, enum: ['pending', 'used', 'cancelled'], default: 'pending' },
   createdBy: { type: String, default: '' },
   usedTableId: { type: String, default: '' },
-  usedTableIds: { type: [String], default: [] }
+  usedTableIds: { type: [String], default: [] },
+  // Party bookings are billed from the Party tab (no tables) as two separate
+  // bills — { play: { id, no, date }, food: { id, no, date } }.
+  bills: { type: mongoose.Schema.Types.Mixed, default: {} }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Booking', bookingSchema);

@@ -15,7 +15,7 @@ import PaymentSheet from './PaymentSheet';
 // payment mode) without voiding it. Only Food + Socks items are addable here
 // — Play needs a live timer and Membership has cross-bill state — so those
 // stay void-and-rebill territory; see billController.editBill on the server.
-export default function EditBillSheet({ open, bill, onClose, onSaved }) {
+export default function EditBillSheet({ open, bill, approval, onClose, onSaved }) {
   const { config } = useConfig();
   const toast = useToast();
   const [items, setItems] = useState([]);
@@ -61,7 +61,8 @@ export default function EditBillSheet({ open, bill, onClose, onSaved }) {
 
   const save = async (pay) => {
     const { data } = await api.patch(`/bills/${bill._id}/edit`, {
-      items: items.map(({ id, ...rest }) => rest), discount, discountType, pay, serviceCharge, serviceChargeType
+      items: items.map(({ id, ...rest }) => rest), discount, discountType, pay, serviceCharge, serviceChargeType,
+      reason: approval && approval.reason, password: approval && approval.password
     });
     toast('Bill update ho gaya');
     setPaySheet(false);
@@ -70,9 +71,10 @@ export default function EditBillSheet({ open, bill, onClose, onSaved }) {
 
   return (
     <Sheet open={open} onClose={onClose}>
-      <h2 style={{ margin: '0 0 12px', fontSize: 17 }}>Bill #{bill.no} edit karein</h2>
+      <h2 style={{ margin: '0 0 4px', fontSize: 17 }}>Bill #{bill.no} edit karein</h2>
+      {approval && <p className="hint" style={{ margin: '0 0 12px' }}>Reason: {approval.reason}</p>}
       {hasMembership ? (
-        <p className="hint">Ye bill membership plan bechta/use karta hai — is tarah ke bill edit nahi ho sakte, kyunki membership balance corrupt ho sakta hai. Void karke naya bill banayein.</p>
+        <p className="hint">Ye bill membership plan bechta/use karta hai — is tarah ke bill edit nahi ho sakte, kyunki membership balance corrupt ho sakta hai. Delete karke naya bill banayein.</p>
       ) : (
         <>
           <div className="seg" style={{ marginBottom: 14 }}>
