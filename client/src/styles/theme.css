@@ -231,6 +231,11 @@ table.tb tr.void td{opacity:.45;text-decoration:line-through}
   #printarea .rt{text-align:right}
   #printarea hr{border:0;border-top:1px dashed #000;margin:6px 0}
   /* A4 party booking form */
+  /* Thermal printers cut a little above the print head, so the last lines
+     (footer "Thank you") ended up on top of the next bill. Feed ~20mm of
+     blank paper after every slip so the cut lands below the footer; the tiny
+     dot stops drivers that trim trailing white space from dropping the feed. */
+  #printarea:not(.a4)::after{content:"·";display:block;margin-top:20mm;text-align:center;font-size:10px;line-height:1}
   #printarea.a4{width:auto;max-width:190mm;padding:10mm 10mm;font-size:12px;line-height:1.35}
   #printarea.a4 .pf-hd{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #000;padding-bottom:4px;margin-bottom:6px}
   #printarea.a4 .pf-hd b{font-size:22px}
