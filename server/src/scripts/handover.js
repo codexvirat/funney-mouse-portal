@@ -6,7 +6,7 @@
 //   node src/scripts/handover.js members.json --confirm  backup, wipe, import
 //
 // members.json is a list of rows from the membership register:
-//   { parent, kid, phone, start: 'DD/MM/YYYY', total, done, left }
+//   { parent, kid, phone, altPhone?, cardHolder, start: 'DD/MM/YYYY', total, done, left, amount, remark? }
 // total 0 = unlimited visits. Rows sharing a phone become one membership
 // (the app keeps one membership per phone): kids are joined, visits added up.
 require('dotenv').config();
@@ -51,17 +51,20 @@ function buildMembers(rows, plans) {
     // A single pass that matches a Setup plan keeps that plan's id, so
     // renewals stack and its member discount applies.
     const plan = rs.length === 1 && plans.find(p => p.kind === 'visits' && p.visits === (rs[0].total || 0));
-    const altPhones = uniq(rs.map(r => r.altPhone));
     return {
       phone,
-      name: uniq(rs.map(r => title(r.parent))).join(' / ') + (altPhones.length ? ` (alt ${altPhones.join(', ')})` : ''),
+      altPhone: String(rs.map(r => r.altPhone).find(Boolean) || '').replace(/\D/g, '').slice(0, 10),
+      name: uniq(rs.map(r => title(r.parent))).join(' / '),
       kid: uniq(rs.flatMap(r => String(r.kid).split('/')).map(title)).join(', '),
       membership: {
         planId: plan ? plan.id : '',
         planName: plan ? plan.name : uniq(rs.map(r => planLabel(r.total))).join(' + ') + (rs.length > 1 && !unlimited ? ` (${rs.length} passes)` : ''),
         kind: 'visits', hours: 0, hoursLeft: 0,
         visits, visitsLeft, visitsUsed,
-        startedAt, expiresAt: '', renewals: 0
+        startedAt, expiresAt: '', renewals: 0,
+        cardHolder: uniq(rs.map(r => title(r.cardHolder))).join(' / '),
+        amount: rs.reduce((s, r) => s + (Number(r.amount) || 0), 0),
+        remark: uniq(rs.map(r => String(r.remark || '').trim())).join('; ')
       }
     };
   });
@@ -84,7 +87,7 @@ function buildMembers(rows, plans) {
   members.forEach(m => {
     const v = m.membership;
     const left = v.visits ? `${v.visitsLeft}/${v.visits} left` : 'unlimited';
-    console.log(`  ${m.phone}  ${m.name} — ${m.kid} | ${v.planName} | ${left}, ${v.visitsUsed} used | since ${v.startedAt}`);
+    console.log(`  ${m.phone}${m.altPhone ? '/' + m.altPhone : ''}  ${m.name} — ${m.kid} | card: ${v.cardHolder} | ${v.planName} | ${left}, ${v.visitsUsed} used | ₹${v.amount} | since ${v.startedAt}`);
   });
 
   if (flag !== '--confirm') {

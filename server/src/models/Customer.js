@@ -13,7 +13,12 @@ const membershipSchema = new mongoose.Schema({
   kind: { type: String, default: 'hours' },
   visits: { type: Number, default: 0 },
   visitsLeft: { type: Number, default: 0 },
-  visitsUsed: { type: Number, default: 0 }
+  visitsUsed: { type: Number, default: 0 },
+  // From the membership register: whose name is on the card, what was paid
+  // (all passes on this membership together) and any note.
+  cardHolder: { type: String, default: '' },
+  amount: { type: Number, default: 0 },
+  remark: { type: String, default: '' }
 }, { _id: false });
 
 const recentSchema = new mongoose.Schema({
@@ -25,6 +30,7 @@ const recentSchema = new mongoose.Schema({
 const customerSchema = new mongoose.Schema({
   phone: { type: String, required: true, unique: true, index: true },
   name: { type: String, default: '' },
+  altPhone: { type: String, default: '' },
   kid: { type: String, default: '' },
   kidDob: { type: String, default: '' },
   anniversary: { type: String, default: '' },

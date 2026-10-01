@@ -110,7 +110,7 @@ function computeService(itemsClean, cfg, value, type) {
 // Shared by the quick-bill flow (createBill) and the table checkout flow —
 // turns a set of items + discount + payment split into a saved Sale and
 // updates the attached Customer (visits/spend/membership).
-async function finalizeBill({ phone, name, kid, kidDob, anniversary, items, discount, discountType, pay, staff, extra, redeemPoints, serviceCharge: scValue, serviceChargeType }) {
+async function finalizeBill({ phone, altPhone, name, kid, kidDob, anniversary, items, discount, discountType, pay, staff, extra, redeemPoints, serviceCharge: scValue, serviceChargeType }) {
   if (!Array.isArray(items) || !items.length) {
     const err = new Error('Bill me items chahiye');
     err.status = 400;
@@ -124,6 +124,7 @@ async function finalizeBill({ phone, name, kid, kidDob, anniversary, items, disc
     customer = await Customer.findOne({ phone });
     if (!customer) customer = new Customer({ phone, name: '', kid: '', visits: 0, totalSpend: 0, recent: [], membership: null });
     if (name) customer.name = name;
+    if (altPhone) customer.altPhone = String(altPhone).replace(/\D/g, '').slice(0, 10);
     // Child's name/birthday and anniversary typed on the billing screen — only ever fill in
     // or update, never wipe what's already on record.
     if (kid) customer.kid = String(kid).slice(0, 60);
@@ -219,7 +220,10 @@ async function finalizeBill({ phone, name, kid, kidDob, anniversary, items, disc
         startedAt: stack ? (old.startedAt || date) : date,
         // days 0 = lifetime pass, never expires.
         expiresAt: planDays > 0 ? addDays(base, planDays) : '',
-        renewals: stack ? (old.renewals || 0) + 1 : 0
+        renewals: stack ? (old.renewals || 0) + 1 : 0,
+        cardHolder: String(plan.meta.cardHolder || (stack && old.cardHolder) || '').slice(0, 60),
+        amount: (stack ? (old.amount || 0) : 0) + plan.amount,
+        remark: String(plan.meta.remark || (stack && old.remark) || '').slice(0, 200)
       };
     }
 
@@ -263,9 +267,9 @@ exports.previewDiscount = asyncHandler(async (req, res) => {
 });
 
 exports.createBill = asyncHandler(async (req, res) => {
-  const { phone, name, kid, kidDob, anniversary, items, discount, discountType, pay, redeemPoints, serviceCharge, serviceChargeType } = req.body;
+  const { phone, altPhone, name, kid, kidDob, anniversary, items, discount, discountType, pay, redeemPoints, serviceCharge, serviceChargeType } = req.body;
   try {
-    const { bill, customer } = await finalizeBill({ phone, name, kid, kidDob, anniversary, items, discount, discountType, pay, redeemPoints, serviceCharge, serviceChargeType, staff: req.user.username });
+    const { bill, customer } = await finalizeBill({ phone, altPhone, name, kid, kidDob, anniversary, items, discount, discountType, pay, redeemPoints, serviceCharge, serviceChargeType, staff: req.user.username });
     res.status(201).json({ bill, customer });
   } catch (e) {
     res.status(e.status || 500);

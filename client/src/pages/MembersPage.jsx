@@ -4,6 +4,7 @@ import { useConfig } from '../context/ConfigContext';
 import { openWhatsApp } from '../utils/notify';
 import { prettyDate } from '../utils/date';
 import { memberBalance, memberValidity } from '../utils/member';
+import { INR } from '../utils/money';
 import NewMembershipCard from '../components/NewMembershipCard';
 
 function reminderText(m, shop) {
@@ -38,6 +39,70 @@ function MemberRow({ m, shop, onStartMembership, onViewCustomer }) {
   );
 }
 
+// Total / done / remaining the way the membership register writes them.
+function visitCols(m) {
+  if (m.kind !== 'visits') {
+    return m.hours > 0
+      ? [m.hours + ' hr', Math.round((m.hours - (m.hoursLeft || 0)) * 10) / 10 + ' hr', Math.round((m.hoursLeft || 0) * 10) / 10 + ' hr']
+      : ['Unlimited', '', 'Unlimited'];
+  }
+  return m.visits > 0 ? [m.visits, m.visitsUsed || 0, m.visitsLeft || 0] : ['Unlimited', m.visitsUsed || 0, 'Unlimited'];
+}
+
+function exportMembers(list) {
+  const q = s => '"' + String(s == null ? '' : s).replace(/"/g, '""') + '"';
+  const head = ['S', 'Parents Name', 'Child Name', 'Contact', 'Card Holder', 'Start Date', 'Plan', 'Expire Date', 'Total Visit', 'Done Visit', 'Remaining Visit', 'Amount', 'Remark', 'Status'];
+  const lines = [head.join(',')].concat(list.map((m, i) => [
+    i + 1, q(m.name), q(m.kid), q(m.phone + (m.altPhone ? ' / ' + m.altPhone : '')), q(m.cardHolder), m.startedAt || '',
+    q(m.planName), m.expiresAt || 'Lifetime', ...visitCols(m), m.amount || '', q(m.remark), (MEMTAG[m.state] || MEMTAG.active)[0]
+  ].join(',')));
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' }));
+  a.download = 'funny-mouse-members.csv';
+  a.click();
+}
+
+function MemberTable({ list, onStartMembership, onViewCustomer }) {
+  return (
+    <div className="scrollx">
+      <table className="tb" style={{ minWidth: 980 }}>
+        <thead><tr>
+          <th>S</th><th>Parent</th><th>Child</th><th>Contact</th><th>Card holder</th><th>Start</th><th>Plan</th>
+          <th style={{ textAlign: 'right' }}>Total</th><th style={{ textAlign: 'right' }}>Done</th><th style={{ textAlign: 'right' }}>Left</th>
+          <th style={{ textAlign: 'right' }}>Amount</th><th>Remark</th><th>Status</th><th></th>
+        </tr></thead>
+        <tbody>
+          {list.map((m, i) => {
+            const [label, color] = MEMTAG[m.state] || MEMTAG.active;
+            const [total, done, left] = visitCols(m);
+            return (
+              <tr key={m.phone}>
+                <td>{i + 1}</td>
+                <td><b>{m.name || '—'}</b></td>
+                <td>{m.kid}</td>
+                <td>{m.phone}{m.altPhone && <div className="hint">{m.altPhone}</div>}</td>
+                <td>{m.cardHolder}</td>
+                <td style={{ whiteSpace: 'nowrap' }}>{m.startedAt ? prettyDate(m.startedAt) : ''}</td>
+                <td>{m.planName}<div className="hint">{memberValidity(m)}</div></td>
+                <td style={{ textAlign: 'right' }}>{total}</td>
+                <td style={{ textAlign: 'right' }}>{done}</td>
+                <td style={{ textAlign: 'right' }}><b>{left}</b></td>
+                <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>{m.amount ? INR(m.amount) : ''}</td>
+                <td style={{ maxWidth: 180 }}>{m.remark}</td>
+                <td><span className="badge" style={{ background: 'transparent', border: `1px solid ${color}`, color, whiteSpace: 'nowrap' }}>{label}</span></td>
+                <td style={{ whiteSpace: 'nowrap' }}>
+                  <button className="btn sm" onClick={() => onStartMembership(m.phone)}>{m.state === 'expired' || m.state === 'used' ? 'Dobara bechein' : 'Renew'}</button>{' '}
+                  <button className="btn sm ghost" onClick={() => onViewCustomer(m.phone)}>Details</button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default function MembersPage({ onStartMembership, onViewCustomer }) {
   const { config } = useConfig();
   const shop = (config && config.shopName) || 'Funny Mouse';
@@ -46,6 +111,7 @@ export default function MembersPage({ onStartMembership, onViewCustomer }) {
   const renewHere = (phone) => { setRenew({ phone, at: Date.now() }); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [q, setQ] = useState('');
 
   const load = async () => {
     setLoading(true);
@@ -57,6 +123,12 @@ export default function MembersPage({ onStartMembership, onViewCustomer }) {
   const hoursLeft = live.reduce((a, m) => a + (m.kind !== 'visits' && m.hours > 0 ? (m.hoursLeft || 0) : 0), 0);
   const visitsLeft = live.reduce((a, m) => a + (m.kind === 'visits' && m.visits > 0 ? (m.visitsLeft || 0) : 0), 0);
   const alertList = members.filter(m => ['expiring', 'low'].includes(m.state));
+  // Register order: oldest membership first, like the paper register.
+  const register = [...members].sort((a, b) => String(a.startedAt || '').localeCompare(String(b.startedAt || '')));
+  const needle = q.trim().toLowerCase();
+  const shown = needle
+    ? register.filter(m => [m.name, m.kid, m.phone, m.altPhone, m.cardHolder].some(v => String(v || '').toLowerCase().includes(needle)))
+    : register;
 
   return (
     <>
@@ -75,11 +147,19 @@ export default function MembersPage({ onStartMembership, onViewCustomer }) {
               {alertList.map(m => <MemberRow key={m.phone} m={m} shop={shop} onStartMembership={renewHere} onViewCustomer={onViewCustomer} />)}
             </div></div>
           )}
-          <div className="card"><div className="hd"><h2>Sab members</h2><div className="spacer"></div><span className="hint">{members.length} total</span></div>
+          <div className="card"><div className="hd"><h2>Membership register</h2><div className="spacer"></div><span className="hint">{members.length} total</span></div>
             <div className="bd">
-              {members.length
-                ? members.map(m => <MemberRow key={m.phone} m={m} shop={shop} onStartMembership={renewHere} onViewCustomer={onViewCustomer} />)
-                : <div className="empty"><b>Abhi koi member nahi</b>Upar number daal kar pehla plan bech dijiye.</div>}
+              {members.length ? (
+                <>
+                  <div className="row" style={{ marginBottom: 10 }}>
+                    <input type="text" placeholder="Naam, bachcha ya number se dhoondein" value={q} style={{ flex: '1 1 220px' }} onChange={e => setQ(e.target.value)} />
+                    <button className="btn sm" style={{ flex: '0 0 auto' }} onClick={() => exportMembers(register)}>Export CSV</button>
+                  </div>
+                  {shown.length
+                    ? <MemberTable list={shown} onStartMembership={renewHere} onViewCustomer={onViewCustomer} />
+                    : <p className="hint">Koi member nahi mila.</p>}
+                </>
+              ) : <div className="empty"><b>Abhi koi member nahi</b>Upar number daal kar pehla plan bech dijiye.</div>}
             </div>
           </div>
         </>

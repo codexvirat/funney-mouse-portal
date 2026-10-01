@@ -26,7 +26,8 @@ exports.listMembers = asyncHandler(async (req, res) => {
       const m = c.membership;
       const state = memState(m);
       return {
-        phone: c.phone, name: c.name, kid: c.kid,
+        phone: c.phone, altPhone: c.altPhone, name: c.name, kid: c.kid,
+        cardHolder: m.cardHolder || '', amount: m.amount || 0, remark: m.remark || '',
         planId: m.planId, planName: m.planName, hours: m.hours, hoursLeft: m.hoursLeft,
         kind: m.kind || 'hours', visits: m.visits || 0, visitsLeft: m.visitsLeft || 0, visitsUsed: m.visitsUsed || 0,
         startedAt: m.startedAt, expiresAt: m.expiresAt, state
