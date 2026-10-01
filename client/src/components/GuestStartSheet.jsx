@@ -9,9 +9,11 @@ import Sheet from './Sheet';
 // their pass and how many kids play. Then either:
 //  - Sirf khelna: no table — a ₹0 bill records the visit and the server
 //    takes the visits off the pass;
-//  - Table + khana: pick a free table and open it. The server charges the
+//  - Khelna + khana: pick a free table and open it. The server charges the
 //    visits and puts a ₹0 "Membership visit" line on the table, so the bill
 //    is only for food.
+//  - Sirf khana: a normal table with the member's number on it (member
+//    discount still applies) and no visit charged.
 function MemberStart({ onBack, onOpened, onDone }) {
   const { config } = useConfig();
   const toast = useToast();
@@ -62,6 +64,7 @@ function MemberStart({ onBack, onOpened, onDone }) {
   const togglePick = (k) => setPicked(p => p.includes(k) ? p.filter(x => x !== k) : (p.length < maxKids ? [...p, k] : p));
   // Hours plans run on the table's play timer, so they always need a table.
   const playOnly = visitPass && mode === 'play';
+  const foodOnly = visitPass && mode === 'food';
 
   const playNow = async () => {
     setBusy(true);
@@ -90,10 +93,10 @@ function MemberStart({ onBack, onOpened, onDone }) {
     try {
       const { data } = await api.post('/table-orders', {
         tableId: table.id, tableName: table.name, phone, name: cust.name || 'Walk-in',
-        adults, kids: n, member: true, memberKids: n, memberKidNames: kidNames
+        ...(foodOnly ? { adults, kids: 0 } : { adults, kids: n, member: true, memberKids: n, memberKidNames: kidNames })
       });
       const left = data.customer && data.customer.membership;
-      toast(visitPass
+      toast(foodOnly ? `${table.name} khula · sirf khana, koi visit nahi kati` : visitPass
         ? `${table.name} khula · ${n} visit kati${left && left.visits > 0 ? ` · ${left.visitsLeft} bache` : ''}`
         : table.name + ' khula (member)');
       onOpened(data.order);
@@ -127,12 +130,15 @@ function MemberStart({ onBack, onOpened, onDone }) {
           </div>
 
           {visitPass && (
-            <div className="paytiles" style={{ marginBottom: 12 }}>
+            <div className="paytiles" style={{ marginBottom: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
               <button className={'pt upi' + (mode === 'play' ? ' on' : '')} onClick={() => setMode('play')}>
                 <b>Sirf khelna</b><span>Table nahi khulegi · bas visit kategi</span>
               </button>
               <button className={'pt cash' + (mode === 'table' ? ' on' : '')} onClick={() => setMode('table')}>
-                <b>Table + khana</b><span>Table khulegi · food ka bill banega</span>
+                <b>Khelna + khana</b><span>Visit kategi · table pe food ka bill</span>
+              </button>
+              <button className={'pt due' + (mode === 'food' ? ' on' : '')} onClick={() => setMode('food')}>
+                <b>Sirf khana</b><span>Koi visit nahi kategi · sirf food ka bill</span>
               </button>
             </div>
           )}
@@ -147,7 +153,7 @@ function MemberStart({ onBack, onOpened, onDone }) {
             )}
 
           <div className="row" style={{ marginBottom: 12 }}>
-            {named ? (
+            {foodOnly ? null : named ? (
               <div style={{ flex: '1 1 100%' }}>
                 <span className="hint" style={{ display: 'block', marginBottom: 6 }}>Kaun khelega? (tap karein)</span>
                 <div className="chips">
@@ -171,12 +177,14 @@ function MemberStart({ onBack, onOpened, onDone }) {
               {busy ? 'Saving…' : n < 1 ? 'Bachcha chunein' : `Khelne bhejein — ${n} visit katega`}
             </button>
           ) : (
-            <button className="btn primary" style={{ width: '100%', padding: 14 }} disabled={busy || !table || n < 1 || n > maxKids} onClick={open}>
-              {busy ? 'Opening…' : n < 1 ? 'Bachcha chunein' : `${table ? table.name : 'Table'} kholen${visitPass ? ` — ${n} visit katega` : ''}`}
+            <button className="btn primary" style={{ width: '100%', padding: 14 }} disabled={busy || !table || (!foodOnly && (n < 1 || n > maxKids))} onClick={open}>
+              {busy ? 'Opening…' : foodOnly ? `${table ? table.name : 'Table'} kholen — koi visit nahi katega` : n < 1 ? 'Bachcha chunein' : `${table ? table.name : 'Table'} kholen${visitPass ? ` — ${n} visit katega` : ''}`}
             </button>
           )}
           {visitPass && <p className="hint" style={{ margin: '8px 0 0', textAlign: 'center' }}>
-            {playOnly ? 'Koi paisa nahi lagega — "Sabhi bills" me ₹0 ki entry ban jayegi.' : 'Play ka paisa nahi lagega — bill sirf food ka banega.'}
+            {playOnly ? 'Koi paisa nahi lagega — "Sabhi bills" me ₹0 ki entry ban jayegi.'
+              : foodOnly ? 'Baad me khelna ho to table par Play add karein.'
+              : 'Play ka paisa nahi lagega — bill sirf food ka banega.'}
           </p>}
         </>
       )}
