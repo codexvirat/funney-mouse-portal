@@ -11,13 +11,13 @@ import MembersPage from './pages/MembersPage';
 import CustomersPage from './pages/CustomersPage';
 import SetupPage from './pages/SetupPage';
 import KitchenPage from './pages/KitchenPage';
-import CashPage from './pages/CashPage';
 import AuditPage from './pages/AuditPage';
 import GuestStartSheet from './components/GuestStartSheet';
 import PartyPage from './pages/PartyPage';
 import BillsPage from './pages/BillsPage';
 
-const STAFF_VIEWS = ['tables', 'bill', 'bills', 'party', 'cash'];
+// Cash / Kharcha tab (pages/CashPage) is hidden for now.
+const STAFF_VIEWS = ['tables', 'bill', 'bills', 'party'];
 
 export default function App() {
   const { user, ready, isAdmin } = useAuth();
@@ -71,7 +71,6 @@ export default function App() {
         {view === 'bill' && <BillPage billIntent={billIntent} onConsumeIntent={() => setBillIntent(null)} />}
         {view === 'bills' && <BillsPage />}
         {view === 'party' && <PartyPage />}
-        {view === 'cash' && <CashPage />}
         {view === 'day' && isAdmin && <DayEndPage />}
         {view === 'log' && isAdmin && <AuditPage />}
         {view === 'mem' && isAdmin && <MembersPage onStartMembership={startMembership} onViewCustomer={viewCustomer} />}
