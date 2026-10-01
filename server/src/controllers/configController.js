@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const Config = require('../models/Config');
 const { audit } = require('../utils/audit');
 const { broadcast } = require('../utils/events');
+const MENU = require('../data/menu');
 
 const DEFAULT_CFG = {
   shopName: 'Funny Mouse',
@@ -16,16 +17,7 @@ const DEFAULT_CFG = {
   extraHalfHour: 150,
   sockPrice: 50,
   adultFree: true,
-  menu: [
-    { id: 'm1', name: 'Cheese Sandwich', price: 120 }, { id: 'm2', name: 'French Fries', price: 130 },
-    { id: 'm3', name: 'Veg Burger', price: 150 }, { id: 'm4', name: 'Pizza (7")', price: 220 },
-    { id: 'm5', name: 'Maggi', price: 100 }, { id: 'm6', name: 'White Sauce Pasta', price: 180 },
-    { id: 'm7', name: 'Nachos', price: 150 }, { id: 'm8', name: 'Popcorn', price: 60 },
-    { id: 'm9', name: 'Cold Coffee', price: 130 }, { id: 'm10', name: 'Chocolate Shake', price: 150 },
-    { id: 'm11', name: 'Fresh Lime Soda', price: 80 }, { id: 'm12', name: 'Ice Cream Cup', price: 70 },
-    { id: 'm13', name: 'Tea', price: 40 }, { id: 'm14', name: 'Coffee', price: 60 },
-    { id: 'm15', name: 'Cold Drink', price: 40 }, { id: 'm16', name: 'Water Bottle', price: 20 }
-  ],
+  menu: MENU,
   plans: [
     { id: 'p1', name: '10 Hour Pack', price: 2800, hours: 10, days: 90 },
     { id: 'p2', name: '20 Hour Pack', price: 5000, hours: 20, days: 180 },
