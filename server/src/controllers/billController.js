@@ -201,21 +201,29 @@ async function finalizeBill({ phone, altPhone, name, kid, kidDob, anniversary, i
     if (plan && plan.meta) {
       const old = customer.membership;
       const activeOld = !!(old && memberActive({ membership: old }));
-      const stack = activeOld && old.planId === plan.refId;
       const kind = plan.meta.kind === 'visits' ? 'visits' : 'hours';
+      // Visit passes pool: any new pass on an active pass adds to it (a
+      // family buying for a second child), whichever pass it is.
+      const pool = activeOld && kind === 'visits' && old.kind === 'visits';
+      const stack = activeOld && (old.planId === plan.refId || pool);
+      // Several passes bought at once (e.g. 2 × 10 visits for two kids).
+      const count = Math.max(1, Math.floor(Number(plan.meta.count) || 1));
       const planHours = kind === 'hours' ? Number(plan.meta.hours) || 0 : 0;
-      const planVisits = kind === 'visits' ? Number(plan.meta.visits) || 0 : 0;
+      const planVisits = kind === 'visits' ? (Number(plan.meta.visits) || 0) * count : 0;
+      // visits 0 = unlimited, and unlimited stays unlimited when pooled.
+      const unlimited = kind === 'visits' && (planVisits === 0 || (stack && !(old.visits > 0)));
+      const planName = plan.meta.planName + (count > 1 ? ` ×${count}` : '');
       const planDays = Number(plan.meta.days) || 0;
       const base = stack && old.expiresAt > date ? old.expiresAt : date;
       customer.membership = {
         planId: plan.refId,
-        planName: plan.meta.planName,
+        planName: stack && old.planId !== plan.refId ? `${old.planName} + ${planName}` : (count > 1 ? planName : plan.meta.planName),
         kind,
         hours: planHours,
         hoursLeft: (stack && planHours > 0 ? (old.hoursLeft || 0) : 0) + planHours,
-        // Renewing the same visit pass adds its visits to what's left.
-        visits: planVisits > 0 ? (stack ? (old.visits || 0) : 0) + planVisits : 0,
-        visitsLeft: planVisits > 0 ? (stack ? (old.visitsLeft || 0) : 0) + planVisits : 0,
+        // Renewing / adding a visit pass adds its visits to what's left.
+        visits: unlimited ? 0 : (stack ? (old.visits || 0) : 0) + planVisits,
+        visitsLeft: unlimited ? 0 : (stack ? (old.visitsLeft || 0) : 0) + planVisits,
         visitsUsed: stack ? (old.visitsUsed || 0) : 0,
         startedAt: stack ? (old.startedAt || date) : date,
         // days 0 = lifetime pass, never expires.

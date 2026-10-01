@@ -21,6 +21,7 @@ export default function NewMembershipCard({ onDone, prefill }) {
   const [altPhone, setAltPhone] = useState('');
   const [cardHolder, setCardHolder] = useState('');
   const [planId, setPlanId] = useState('');
+  const [count, setCount] = useState(1);
   const [amount, setAmount] = useState('');
   const [remark, setRemark] = useState('');
   const [paying, setPaying] = useState(false);
@@ -29,7 +30,7 @@ export default function NewMembershipCard({ onDone, prefill }) {
   // Renew from the list below: fill that member's number (and their plan).
   useEffect(() => {
     if (!prefill) return;
-    setName(''); setKid(''); setAltPhone(''); setCardHolder(''); setPlanId(''); setAmount(''); setRemark('');
+    setName(''); setKid(''); setAltPhone(''); setCardHolder(''); setPlanId(''); setCount(1); setAmount(''); setRemark('');
     setPhone(prefill.phone);
   }, [prefill]);
 
@@ -58,11 +59,16 @@ export default function NewMembershipCard({ onDone, prefill }) {
   const active = memberActive(cust);
 
   const price = Math.max(0, Math.round(Number(amount) || 0));
-  const pickPlan = (p) => { setPlanId(p.id); setAmount(String(p.price)); };
+  const pickPlan = (p) => { setPlanId(p.id); setAmount(String(p.price * count)); };
+  // Several passes at once, e.g. 2 × 10 visits for two children.
+  const setPasses = (n) => { setCount(n); if (plan) setAmount(String(plan.price * n)); };
+  const isPass = !!(plan && plan.kind === 'visits');
+  const passes = isPass ? count : 1;
+  const passName = plan ? plan.name + (passes > 1 ? ' ×' + passes : '') : '';
 
   const reset = () => {
     setPhone(''); setCust(null); setName(''); setKid(''); setAltPhone(''); setCardHolder('');
-    setPlanId(''); setAmount(''); setRemark('');
+    setPlanId(''); setCount(1); setAmount(''); setRemark('');
   };
 
   const takePayment = () => {
@@ -79,9 +85,9 @@ export default function NewMembershipCard({ onDone, prefill }) {
     const { data } = await api.post('/bills', {
       phone, altPhone, name: name.trim(), kid: kid.trim(),
       items: [{
-        cat: 'member', refId: plan.id, name: 'Membership · ' + plan.name, qty: 1, rate: price, amount: price,
+        cat: 'member', refId: plan.id, name: 'Membership · ' + passName, qty: 1, rate: price, amount: price,
         meta: {
-          kind: plan.kind || 'hours', hours: plan.hours, visits: plan.visits || 0, days: plan.days, planName: plan.name,
+          kind: plan.kind || 'hours', hours: plan.hours, visits: plan.visits || 0, days: plan.days, planName: plan.name, count: passes,
           cardHolder: cardHolder.trim() || name.trim(), remark: remark.trim()
         }
       }],
@@ -115,7 +121,9 @@ export default function NewMembershipCard({ onDone, prefill }) {
 
       {cur && (
         <p className="hint" style={{ margin: '-4px 0 10px', color: active ? 'var(--grape)' : undefined }}>
-          Abhi: {memberLabel(cust)}{active ? ' — wahi plan dobara lene par visits / hours jud jayenge; alag plan lene par naya shuru hoga.' : ''}
+          Abhi: {memberLabel(cust)}{active ? (cur.kind === 'visits'
+            ? ' — naya pass isi me jud jayega (visits add honge). Naye bachche ka naam upar jod dein.'
+            : ' — wahi plan dobara lene par hours jud jayenge; alag plan lene par naya shuru hoga.') : ''}
         </p>
       )}
 
@@ -134,7 +142,13 @@ export default function NewMembershipCard({ onDone, prefill }) {
       )}
 
       {plan && (
-        <div className="row">
+        <div className="row" style={{ alignItems: 'flex-end' }}>
+          {isPass && (
+            <div style={{ flex: '0 0 auto', marginBottom: 11 }}>
+              <span style={{ display: 'block', fontSize: 12.5, color: 'var(--muted)', marginBottom: 5 }}>Kitne pass</span>
+              <div className="stepper"><button onClick={() => setPasses(Math.max(1, count - 1))}>−</button><b>{count}</b><button onClick={() => setPasses(Math.min(10, count + 1))}>+</button></div>
+            </div>
+          )}
           <label className="f" style={{ flex: '1 1 120px' }}><span>Amount (₹)</span>
             <input type="number" inputMode="numeric" min="0" value={amount} onChange={e => setAmount(e.target.value)} /></label>
           <label className="f" style={{ flex: '3 1 220px' }}><span>Remark (optional)</span>
@@ -142,12 +156,17 @@ export default function NewMembershipCard({ onDone, prefill }) {
         </div>
       )}
 
+      {isPass && passes > 1 && (
+        <p className="hint" style={{ margin: '-4px 0 10px' }}>
+          {passes} × {plan.name} = {plan.visits > 0 ? plan.visits * passes + ' visits' : 'unlimited visits'} ek hi number par — har bachche ki har visit isme se katti hai.
+        </p>
+      )}
       <button className="btn primary" style={{ width: '100%', padding: 14 }} disabled={!plan} onClick={takePayment}>
         {plan ? `Payment lein — ${INR(price)}` : 'Plan chunein'}
       </button>
 
       <PaymentSheet open={paying} total={plan ? price : 0} onClose={() => setPaying(false)} onSave={save}
-        initialNote={plan ? `${name || phone} · ${plan.name} (${planSummary(plan)})` : undefined} />
+        initialNote={plan ? `${name || phone} · ${passName} (${planSummary(plan)})` : undefined} />
       <ReceiptSheet open={!!receipt} bill={receipt && receipt.bill} customer={receipt && receipt.customer} config={config}
         onClose={() => setReceipt(null)} doneLabel="Done" />
     </div></div>

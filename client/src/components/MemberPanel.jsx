@@ -30,7 +30,7 @@ export default function MemberPanel({ config, cust, setPhone, items, onAdd, toas
         <div className="custfound" style={{ marginBottom: 12, background: active ? 'var(--grape-soft)' : 'var(--berry-soft)', borderColor: active ? 'var(--grape)' : 'var(--berry)' }}>
           <div className="av" style={{ background: active ? 'var(--grape)' : 'var(--berry)' }}>M</div>
           <div><b>{cur.planName}</b><div className="hint">{memberLabel(cust)}</div>
-            <div className="hint">{active ? (cur.kind === 'visits' ? 'Wahi pass dobara lene par visits jud jayenge.' : 'Wahi plan dobara lene par hours aur validity jud jayenge.') : 'Khatam — naya plan lene par fresh shuru hoga.'}</div>
+            <div className="hint">{active ? (cur.kind === 'visits' ? 'Koi bhi naya pass lene par visits isi me jud jayenge.' : 'Wahi plan dobara lene par hours aur validity jud jayenge.') : 'Khatam — naya plan lene par fresh shuru hoga.'}</div>
           </div>
         </div>
       )}
