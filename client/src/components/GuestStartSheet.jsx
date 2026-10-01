@@ -125,25 +125,34 @@ function MemberStart({ onBack, onOpened }) {
 export default function GuestStartSheet({ open, onClose, onMemberOpened, onNonMember, onParty }) {
   const [step, setStep] = useState('choose');
   useEffect(() => { if (open) setStep('choose'); }, [open]);
-  const tile = { width: '100%', textAlign: 'left', padding: 16, marginBottom: 10 };
+  const { config } = useConfig();
   return (
-    <Sheet open={open} onClose={onClose}>
+    <Sheet open={open} onClose={onClose} full>
       {open && step === 'choose' && (
         <>
-          <h2 style={{ margin: '0 0 12px', fontSize: 17 }}>Kaun aaya hai?</h2>
-          <button className="pt upi on" style={tile} onClick={() => setStep('member')}>
-            <b>Member</b><span>Number se verify · ek visit kategi · bill sirf food ka</span>
-          </button>
-          <button className="pt cash on" style={tile} onClick={onNonMember}>
-            <b>Non-member</b><span>Normal table — play aur food dono ka bill</span>
-          </button>
-          <button className="pt due on" style={tile} onClick={onParty}>
-            <b>Party booking</b><span>Party booking page par jaayein</span>
-          </button>
-          <button className="btn ghost" style={{ width: '100%' }} onClick={onClose}>Baad me</button>
+          <div className="guest-head">
+            <small>{(config && config.shopName) || 'Funny Mouse'}</small>
+            <h2>Kaun aaya hai?</h2>
+          </div>
+          <div className="guest-tiles">
+            <button className="pt upi on" onClick={() => setStep('member')}>
+              <b>Member</b><span>Number se verify · ek visit kategi · bill sirf food ka</span>
+            </button>
+            <button className="pt cash on" onClick={onNonMember}>
+              <b>Non-member</b><span>Normal table — play aur food dono ka bill</span>
+            </button>
+            <button className="pt due on" onClick={onParty}>
+              <b>Party booking</b><span>Party booking page par jaayein</span>
+            </button>
+          </div>
+          <button className="btn ghost" style={{ display: 'block', width: '100%', maxWidth: 320, margin: '0 auto' }} onClick={onClose}>Baad me</button>
         </>
       )}
-      {open && step === 'member' && <MemberStart onBack={() => setStep('choose')} onOpened={onMemberOpened} />}
+      {open && step === 'member' && (
+        <div style={{ maxWidth: 560, margin: '0 auto' }}>
+          <MemberStart onBack={() => setStep('choose')} onOpened={onMemberOpened} />
+        </div>
+      )}
     </Sheet>
   );
 }

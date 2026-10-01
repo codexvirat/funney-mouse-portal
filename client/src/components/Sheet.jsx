@@ -9,13 +9,14 @@ let topZ = 41;
 // parent's transformed box, and while closed it hangs off the parent's
 // bottom — scrolling the parent then shows it on top of the parent's
 // content (it was covering the Service charge field).
-export default function Sheet({ open, onClose, children, wide }) {
+// full: covers the whole screen instead of sliding up from the bottom.
+export default function Sheet({ open, onClose, children, wide, full }) {
   const [z, setZ] = useState(41);
   useEffect(() => { if (open) setZ(topZ += 2); }, [open]);
   return createPortal(
     <>
       <div className={'scrim' + (open ? ' open' : '')} style={{ zIndex: z - 1 }} onClick={onClose}></div>
-      <div className={'sheet' + (open ? ' open' : '')} style={{ zIndex: z }} role="dialog" aria-modal="true" aria-label="Sheet">
+      <div className={'sheet' + (full ? ' full' : '') + (open ? ' open' : '')} style={{ zIndex: z }} role="dialog" aria-modal="true" aria-label="Sheet">
         <div className="grab"></div>
         <div className="inner" style={wide ? { maxWidth: 860 } : undefined}>{children}</div>
       </div>

@@ -139,6 +139,16 @@ input::placeholder{color:color-mix(in srgb,var(--muted) 70%,transparent)}
   max-height:92vh;overflow:auto;transform:translateY(100%);transition:transform .22s ease;padding-bottom:calc(16px + env(safe-area-inset-bottom))}
 .sheet.open{transform:translateY(0)}
 .sheet .inner{max-width:620px;margin:0 auto;padding:16px}
+.sheet.full{top:0;max-height:none;border-radius:0;display:flex}
+.sheet.full .grab{display:none}
+.sheet.full .inner{max-width:920px;width:100%;margin:auto;padding:24px 16px}
+.guest-head{text-align:center;margin-bottom:22px}
+.guest-head small{display:block;color:var(--muted);font-size:14px;margin-bottom:4px}
+.guest-head h2{margin:0;font-family:"Bricolage Grotesque";font-size:clamp(28px,6vw,40px)}
+.guest-tiles{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));margin-bottom:16px}
+.guest-tiles .pt{width:100%;min-height:150px;padding:26px 20px;cursor:pointer}
+.guest-tiles .pt b{font-size:26px;margin-bottom:8px}
+.guest-tiles .pt span{font-size:14.5px;line-height:1.4}
 .grab{width:38px;height:4px;border-radius:99px;background:var(--line-2);margin:10px auto 4px}
 .paytiles{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
 .pt{border:1.5px solid var(--line-2);background:var(--surface-2);border-radius:14px;padding:14px;text-align:left}
