@@ -19,6 +19,8 @@ function MemberStart({ onBack, onOpened, onDone }) {
   const [cust, setCust] = useState(null);
   const [looked, setLooked] = useState(false);
   const [kids, setKids] = useState(1);
+  // Which of the member's children came (when more than one is on record).
+  const [picked, setPicked] = useState([]);
   const [adults, setAdults] = useState(1);
   const [free, setFree] = useState(null);
   const [tableId, setTableId] = useState('');
@@ -38,6 +40,7 @@ function MemberStart({ onBack, onOpened, onDone }) {
   }, [config]);
 
   useEffect(() => {
+    setPicked([]);
     if (phone.length !== 10) { setCust(null); setLooked(false); return undefined; }
     let cancelled = false;
     api.get('/customers/' + phone)
@@ -51,6 +54,12 @@ function MemberStart({ onBack, onOpened, onDone }) {
   const visitPass = !!(m && m.kind === 'visits');
   const maxKids = visitPass && m.visits > 0 ? (m.visitsLeft || 0) : 20;
   const table = (free || []).find(t => t.id === tableId);
+  const kidList = [...new Set(String((cust && cust.kid) || '').split(/[,/]/).map(s => s.trim()).filter(Boolean))];
+  const named = kidList.length > 1;
+  const n = named ? picked.length : kids;
+  const kidNames = named ? kidList.filter(k => picked.includes(k)).join(', ') : '';
+  const visitLine = 'Membership visit' + (kidNames ? ' · ' + kidNames : '');
+  const togglePick = (k) => setPicked(p => p.includes(k) ? p.filter(x => x !== k) : (p.length < maxKids ? [...p, k] : p));
   // Hours plans run on the table's play timer, so they always need a table.
   const playOnly = visitPass && mode === 'play';
 
@@ -60,13 +69,13 @@ function MemberStart({ onBack, onOpened, onDone }) {
       const { data } = await api.post('/bills', {
         phone, name: cust.name || '', kid: cust.kid || '',
         items: [{
-          cat: 'play', refId: null, name: 'Membership visit', qty: kids, rate: 0, amount: 0,
-          meta: { minutes: 0, kids, member: true, memberPhone: phone, planName: m.planName }
+          cat: 'play', refId: null, name: visitLine, qty: n, rate: 0, amount: 0,
+          meta: { minutes: 0, kids: n, member: true, memberPhone: phone, planName: m.planName, kidNames }
         }],
         discount: 0, discountType: 'amt', pay: { UPI: 0, CASH: 0, CARD: 0, DUE: 0 }
       });
       const left = data.customer && data.customer.membership;
-      toast(`${cust.name || phone} · ${kids} visit kati${left && left.visits > 0 ? ` · ${left.visitsLeft} bache` : ''}`);
+      toast(`${kidNames || cust.name || phone} · ${n} visit kati${left && left.visits > 0 ? ` · ${left.visitsLeft} bache` : ''}`);
       onDone();
     } catch (e) {
       toast((e.response && e.response.data && e.response.data.message) || 'Visit save nahi hui');
@@ -81,11 +90,11 @@ function MemberStart({ onBack, onOpened, onDone }) {
     try {
       const { data } = await api.post('/table-orders', {
         tableId: table.id, tableName: table.name, phone, name: cust.name || 'Walk-in',
-        adults, kids, member: true, memberKids: kids
+        adults, kids: n, member: true, memberKids: n, memberKidNames: kidNames
       });
       const left = data.customer && data.customer.membership;
       toast(visitPass
-        ? `${table.name} khula · ${kids} visit kati${left && left.visits > 0 ? ` · ${left.visitsLeft} bache` : ''}`
+        ? `${table.name} khula · ${n} visit kati${left && left.visits > 0 ? ` · ${left.visitsLeft} bache` : ''}`
         : table.name + ' khula (member)');
       onOpened(data.order);
     } catch (e) {
@@ -138,10 +147,19 @@ function MemberStart({ onBack, onOpened, onDone }) {
             )}
 
           <div className="row" style={{ marginBottom: 12 }}>
-            <div style={{ flex: '0 0 auto' }}>
-              <span className="hint" style={{ display: 'block', marginBottom: 5 }}>Kids (khelenge)</span>
-              <div className="stepper"><button onClick={() => setKids(v => Math.max(1, v - 1))}>−</button><b>{kids}</b><button onClick={() => setKids(v => Math.min(maxKids, v + 1))}>+</button></div>
-            </div>
+            {named ? (
+              <div style={{ flex: '1 1 100%' }}>
+                <span className="hint" style={{ display: 'block', marginBottom: 6 }}>Kaun khelega? (tap karein)</span>
+                <div className="chips">
+                  {kidList.map(k => <button key={k} className="chip" aria-pressed={picked.includes(k)} onClick={() => togglePick(k)}>{k}</button>)}
+                </div>
+              </div>
+            ) : (
+              <div style={{ flex: '0 0 auto' }}>
+                <span className="hint" style={{ display: 'block', marginBottom: 5 }}>Kids (khelenge)</span>
+                <div className="stepper"><button onClick={() => setKids(v => Math.max(1, v - 1))}>−</button><b>{kids}</b><button onClick={() => setKids(v => Math.min(maxKids, v + 1))}>+</button></div>
+              </div>
+            )}
             {!playOnly && <div style={{ flex: '0 0 auto' }}>
               <span className="hint" style={{ display: 'block', marginBottom: 5 }}>Adults</span>
               <div className="stepper"><button onClick={() => setAdults(v => Math.max(0, v - 1))}>−</button><b>{adults}</b><button onClick={() => setAdults(v => v + 1)}>+</button></div>
@@ -149,12 +167,12 @@ function MemberStart({ onBack, onOpened, onDone }) {
           </div>
           {!visitPass && <p className="hint" style={{ margin: '0 0 12px' }}>Ye hours wala plan hai — table khulne ke baad Play me "Membership se kaato" use karein.</p>}
           {playOnly ? (
-            <button className="btn primary" style={{ width: '100%', padding: 14 }} disabled={busy || kids > maxKids} onClick={playNow}>
-              {busy ? 'Saving…' : `Khelne bhejein — ${kids} visit katega`}
+            <button className="btn primary" style={{ width: '100%', padding: 14 }} disabled={busy || n < 1 || n > maxKids} onClick={playNow}>
+              {busy ? 'Saving…' : n < 1 ? 'Bachcha chunein' : `Khelne bhejein — ${n} visit katega`}
             </button>
           ) : (
-            <button className="btn primary" style={{ width: '100%', padding: 14 }} disabled={busy || !table || kids > maxKids} onClick={open}>
-              {busy ? 'Opening…' : `${table ? table.name : 'Table'} kholen${visitPass ? ` — ${kids} visit katega` : ''}`}
+            <button className="btn primary" style={{ width: '100%', padding: 14 }} disabled={busy || !table || n < 1 || n > maxKids} onClick={open}>
+              {busy ? 'Opening…' : n < 1 ? 'Bachcha chunein' : `${table ? table.name : 'Table'} kholen${visitPass ? ` — ${n} visit katega` : ''}`}
             </button>
           )}
           {visitPass && <p className="hint" style={{ margin: '8px 0 0', textAlign: 'center' }}>

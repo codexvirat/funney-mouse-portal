@@ -32,7 +32,7 @@ exports.listTableOrders = asyncHandler(async (req, res) => {
 });
 
 exports.openTable = asyncHandler(async (req, res) => {
-  const { tableId, tableName, phone, name, adults, kids, reserved, reservedNote, advance, advanceMode, bookingId, member, memberKids } = req.body;
+  const { tableId, tableName, phone, name, adults, kids, reserved, reservedNote, advance, advanceMode, bookingId, member, memberKids, memberKidNames } = req.body;
   if (!tableId) {
     res.status(400);
     throw new Error('Table select karein');
@@ -68,8 +68,8 @@ exports.openTable = asyncHandler(async (req, res) => {
     adults: Math.max(0, Number(adults) || 0),
     kids: Math.max(visitKids, Number(kids) || 0),
     items: visitKids ? [{
-      cat: 'play', refId: null, name: 'Membership visit', qty: visitKids, rate: 0, amount: 0,
-      meta: { minutes: 0, kids: visitKids, member: true, visitCharged: true, memberPhone: memberCust.phone, planName: memberCust.membership.planName }
+      cat: 'play', refId: null, name: 'Membership visit' + (memberKidNames ? ' · ' + String(memberKidNames).slice(0, 80) : ''), qty: visitKids, rate: 0, amount: 0,
+      meta: { minutes: 0, kids: visitKids, member: true, visitCharged: true, memberPhone: memberCust.phone, planName: memberCust.membership.planName, kidNames: String(memberKidNames || '').slice(0, 80) }
     }] : [],
     reserved: !!reserved,
     reservedNote: reservedNote || '',
@@ -88,7 +88,7 @@ exports.openTable = asyncHandler(async (req, res) => {
     if (m.visits > 0) m.visitsLeft = Math.max(0, (m.visitsLeft || 0) - visitKids);
     memberCust.markModified('membership');
     await memberCust.save();
-    await audit(req.user, 'Member visit', `${tableName || tableId} · ${memberCust.name || memberCust.phone} · ${visitKids} visit · ${m.planName}${m.visits > 0 ? ` (${m.visitsLeft} bache)` : ''}`, order._id);
+    await audit(req.user, 'Member visit', `${tableName || tableId} · ${memberCust.name || memberCust.phone}${memberKidNames ? ' (' + memberKidNames + ')' : ''} · ${visitKids} visit · ${m.planName}${m.visits > 0 ? ` (${m.visitsLeft} bache)` : ''}`, order._id);
   }
   res.status(201).json({ order, customer: memberCust });
 });
