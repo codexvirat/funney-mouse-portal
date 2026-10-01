@@ -69,6 +69,10 @@ exports.updateConfig = asyncHandler(async (req, res) => {
   res.json({ config: cfg });
 });
 
+// The printed shop menu, so Setup can load it into a shop that already has
+// a saved menu (the default above only applies to a brand-new database).
+exports.getPrintedMenu = (req, res) => res.json({ menu: MENU });
+
 // Kitchen/staff mark a menu item out of stock (or back) without touching
 // the rest of the settings.
 exports.setMenuAvailability = asyncHandler(async (req, res) => {

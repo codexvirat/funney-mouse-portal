@@ -184,6 +184,12 @@ export default function SetupPage() {
   const loyalty = form.loyalty || { enabled: false, earnPer: 100, pointValue: 1 };
   const setLoyalty = (f, v) => setForm(prev => ({ ...prev, loyalty: { ...loyalty, [f]: v } }));
   const addMenu = () => setForm(prev => ({ ...prev, menu: [...prev.menu, { id: uid(), name: 'New item', price: 0 }] }));
+  const loadPrintedMenu = async () => {
+    if (!window.confirm('Pura food menu printed menu (v3) se replace ho jayega. Continue?')) return;
+    const { data } = await api.get('/config/printed-menu');
+    setForm(prev => ({ ...prev, menu: data.menu }));
+    toast('Printed menu load ho gaya — "Save settings" dabayein');
+  };
   const delMenu = (i) => setForm(prev => ({ ...prev, menu: prev.menu.filter((_, ix) => ix !== i) }));
 
   const updatePlan = (i, f, v) => setForm(prev => { const arr = [...prev.plans]; arr[i] = { ...arr[i], [f]: f === 'name' || f === 'kind' ? v : (Number(v) || 0) }; return { ...prev, plans: arr }; });
@@ -340,7 +346,10 @@ export default function SetupPage() {
               <button className="btn sm danger" style={{ flex: '0 0 auto' }} onClick={() => delMenu(i)}>✕</button>
             </div>
           ))}
-          <button className="btn sm" style={{ marginTop: 10 }} onClick={addMenu}>+ Add item</button>
+          <div className="row" style={{ marginTop: 10 }}>
+            <button className="btn sm" style={{ flex: '0 0 auto' }} onClick={addMenu}>+ Add item</button>
+            <button className="btn sm" style={{ flex: '0 0 auto' }} onClick={loadPrintedMenu}>Load printed menu</button>
+          </div>
           <p className="hint" style={{ margin: '10px 0 0' }}>Category (e.g. Snacks, Drinks, Meals) se billing me items jaldi milte hain. Kitchen login bhi items ko "khatam" mark kar sakta hai.</p>
         </div>
       </div>

@@ -4,6 +4,7 @@ const ctrl = require('../controllers/configController');
 
 router.get('/', protect, ctrl.getConfig);
 router.put('/', protect, adminOnly, ctrl.updateConfig);
+router.get('/printed-menu', protect, adminOnly, ctrl.getPrintedMenu);
 router.patch('/menu/:id/availability', protect, allowRoles('admin', 'staff', 'kitchen'), ctrl.setMenuAvailability);
 
 module.exports = router;
