@@ -22,7 +22,7 @@ export default function AdvanceCard({ api, from, to, adjusted = 0 }) {
   if (!data) return null;
   const { pending, openTables, received } = data;
   const tiles = [
-    ['Is period me li gayi', received.total, `${received.count} booking${received.count === 1 ? '' : 's'}`],
+    ['Is period ki parties ka', received.total, `${received.count} booking${received.count === 1 ? '' : 's'}`],
     ['Bills me adjust hui', adjusted, 'is period ke bills'],
     ['Future bookings pe pending', pending.total, `${pending.list.length} booking${pending.list.length === 1 ? '' : 's'}`],
     ['Abhi open tables pe', openTables.total, `${openTables.list.length} table${openTables.list.length === 1 ? '' : 's'}`]

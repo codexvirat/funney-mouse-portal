@@ -3,7 +3,6 @@ const Booking = require('../models/Booking');
 const TableOrder = require('../models/TableOrder');
 const Config = require('../models/Config');
 const { audit } = require('../utils/audit');
-const { dstr } = require('../utils/date');
 const { finalizeBill } = require('./billController');
 
 exports.listBookings = asyncHandler(async (req, res) => {
@@ -167,6 +166,19 @@ exports.setExtras = asyncHandler(async (req, res) => {
 // payment in the advance's mode, up to the advance, counts as advance.
 const PART_CAT = { play: 'partyplay', food: 'party' };
 
+// { CASH: 10000, UPI: 15000 } — from the form's date-wise payments, or the
+// single advance on older bookings.
+function advanceSplit(booking) {
+  const list = booking.party && booking.party.payments;
+  if (!Array.isArray(list)) return booking.advance > 0 ? { [booking.advanceMode || 'CASH']: booking.advance } : {};
+  const out = {};
+  list.forEach(x => {
+    const amt = Math.max(0, Number(x.amount) || 0);
+    if (amt) out[x.mode || 'CASH'] = (out[x.mode || 'CASH'] || 0) + amt;
+  });
+  return out;
+}
+
 exports.finalBill = asyncHandler(async (req, res) => {
   const booking = await Booking.findById(req.params.id);
   if (!booking) {
@@ -189,8 +201,15 @@ exports.finalBill = asyncHandler(async (req, res) => {
   const clean = (Array.isArray(items) ? items : [])
     .map(i => ({ cat: PART_CAT[i.part] || 'party', name: String(i.name || '').slice(0, 120), qty: 1, rate: Math.max(0, Math.round(Number(i.rate) || 0)), meta: null }))
     .filter(i => i.name && i.rate > 0);
-  const mode = booking.advanceMode || 'CASH';
-  const adv = booking.advance > 0 ? Math.min(booking.advance, Number(pay && pay[mode]) || 0) : 0;
+  // The advance may have come in parts, in different modes — net each mode
+  // separately.
+  const used = {};
+  Object.entries(advanceSplit(booking)).forEach(([m, amt]) => {
+    const v = Math.min(amt, Number(pay && pay[m]) || 0);
+    if (v > 0) used[m] = v;
+  });
+  const adv = Object.values(used).reduce((a, v) => a + v, 0);
+  const mode = Object.keys(used).join('+');
   const p = booking.party;
   let result;
   try {
@@ -200,7 +219,7 @@ exports.finalBill = asyncHandler(async (req, res) => {
       items: clean, discount: 0, discountType: 'amt', pay,
       staff: req.user.username,
       extra: {
-        advance: adv, advanceMode: adv ? mode : '', bookingId: String(booking._id),
+        advance: adv, advanceMode: mode, advanceByMode: adv ? used : null, bookingId: String(booking._id),
         kids: (Number(p.playKids) || Number(p.kids && p.kids.count) || 0) + (Number(p.mgInc && p.mgInc.kids) || 0),
         adults: (Number(p.adults && p.adults.count) || 0) + (Number(p.mgInc && p.mgInc.adults) || 0)
       }
@@ -218,19 +237,17 @@ exports.finalBill = asyncHandler(async (req, res) => {
 
 // Everything about advance money in one place, for the admin Day-end and
 // owner reports screens: token advances on future bookings not yet used,
-// advances sitting on currently open tables, and advances taken in the
-// selected period (bookings created from..to).
+// advances sitting on currently open tables, and advances for parties in the
+// selected period. An advance counts on the party's own date (eventDate),
+// not the day it was taken — a token paid in October for a November party
+// shows up in November's day-end.
 exports.advanceSummary = asyncHandler(async (req, res) => {
   const { from, to } = req.query;
-  const [pending, tables, recent] = await Promise.all([
+  const [pending, tables, received] = await Promise.all([
     Booking.find({ status: 'pending', advance: { $gt: 0 } }).sort('eventDate'),
     TableOrder.find({ advance: { $gt: 0 } }).sort('openedAt'),
-    from && to ? Booking.find({ advance: { $gt: 0 }, status: { $ne: 'cancelled' } }) : []
+    from && to ? Booking.find({ advance: { $gt: 0 }, status: { $ne: 'cancelled' }, eventDate: { $gte: from, $lte: to } }) : []
   ]);
-  const received = recent.filter(b => {
-    const d = dstr(new Date(b.createdAt));
-    return d >= from && d <= to;
-  });
   const sum = list => list.reduce((a, x) => a + (x.advance || 0), 0);
   res.json({
     pending: { total: sum(pending), list: pending.map(b => ({ _id: b._id, name: b.name, phone: b.phone, eventDate: b.eventDate, guests: b.guests, advance: b.advance, advanceMode: b.advanceMode })) },

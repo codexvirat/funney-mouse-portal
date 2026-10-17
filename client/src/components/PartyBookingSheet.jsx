@@ -35,7 +35,7 @@ function blankParty() {
     addons: ADDONS.map(name => ({ name, on: false, amount: 0, gst: 18 })),
     requirements: '',
     motherName: '', motherPhone: '', fatherName: '', fatherPhone: '',
-    advance: 0, advanceMode: 'CASH', nextPaymentDate: '',
+    advance: 0, advanceMode: 'CASH', payments: [], nextPaymentDate: '',
     mgInc: { kids: 0, adults: 0, nanny: 0, driver: 0, socks: 0 }, socksRate: 0
   };
 }
@@ -48,6 +48,13 @@ function partyFromBooking(b) {
     p.motherPhone = b.phone || ''; p.requirements = b.note || '';
   }
   p.advance = b.advance || 0; p.advanceMode = b.advanceMode || 'CASH';
+  // Bookings saved before date-wise payments had one advance figure — it
+  // becomes the first payment, dated the booking day.
+  if (!Array.isArray(p.payments)) {
+    p.payments = p.advance > 0
+      ? [{ date: p.bookingDate || (b.createdAt ? dstr(new Date(b.createdAt)) : dstr()), amount: p.advance, mode: p.advanceMode }]
+      : [];
+  }
   const names = new Set(p.addons.map(a => a.name));
   p.addons = [...p.addons, ...ADDONS.filter(x => !names.has(x)).map(name => ({ name, on: false, amount: 0, gst: 18 }))];
   return p;
@@ -69,6 +76,24 @@ function dayInfo(s) {
   const [y, m, d] = s.split('-').map(Number);
   const dt = new Date(y, m - 1, d);
   return { day: dt.toLocaleDateString('en-IN', { weekday: 'long' }), weekend: dt.getDay() === 0 || dt.getDay() === 6 };
+}
+
+// Advance comes in parts on different days — each { date, amount, mode }.
+// Old forms without the list have a single advance figure.
+export function advancePayments(p) {
+  if (Array.isArray(p.payments)) return p.payments.filter(x => n(x.amount) > 0);
+  return n(p.advance) > 0 ? [{ date: p.bookingDate || '', amount: n(p.advance), mode: p.advanceMode || 'CASH' }] : [];
+}
+
+export function advanceByMode(p) {
+  const out = {};
+  advancePayments(p).forEach(x => { const m = x.mode || 'CASH'; out[m] = (out[m] || 0) + n(x.amount); });
+  return out;
+}
+
+// "CASH", or "CASH+UPI" when the parts came in different modes.
+export function advanceModeLabel(p) {
+  return Object.keys(advanceByMode(p)).join('+') || p.advanceMode || 'CASH';
 }
 
 // Every line of the estimate. `final` adds the MG increase the host confirms
@@ -118,7 +143,7 @@ export function calcParty(p) {
   const fin = build(true);
   const hasInc = Object.values(inc).some(v => n(v) > 0) || (p.extras || []).length > 0;
   const total = fin.total;
-  const advance = n(p.advance);
+  const advance = advancePayments(p).reduce((a, x) => a + n(x.amount), 0);
   return {
     est, fin, hasInc, total, advance,
     minAdvance: Math.ceil(total * 0.25),
@@ -185,7 +210,8 @@ export function partyFormHTML(p, shopName) {
       <tr class="pf-tot"><td colspan="2">Final total</td><td class="rt">${INR(c.fin.total)}</td></tr></table>` : ''}
     <table class="pf-kv" style="margin-top:8px">
       ${row('Total payment', INR(c.total))}
-      ${row('Advance', `${INR(c.advance)} (${esc(p.advanceMode)})${c.advance < c.minAdvance ? ' — min 25% = ' + INR(c.minAdvance) : ''}`)}
+      ${advancePayments(p).map((x, i) => row(`Advance ${i + 1}`, `${x.date ? prettyDate(x.date) + ' · ' : ''}${INR(x.amount)} (${esc(x.mode)})`)).join('')}
+      ${row('Total advance', `${INR(c.advance)}${c.advance < c.minAdvance ? ' — min 25% = ' + INR(c.minAdvance) : ''}`)}
       ${row('Next payment date', p.nextPaymentDate ? prettyDate(p.nextPaymentDate) : '')}
       ${row('Balance (before party starts)', INR(c.balance))}
     </table>
@@ -204,7 +230,8 @@ function estimateText(p, shopName) {
     ...c.fin.lines.map(l => `${l.label}: ${l.detail} = ${INR(l.amount)}`), '',
     `Play: ${INR(c.fin.playBill)} · Food: ${INR(c.fin.foodBill)}`,
     `*Total: ${INR(c.total)}*`,
-    c.advance ? `Advance: ${INR(c.advance)} (${p.advanceMode})` : `Advance (min 25%): ${INR(c.minAdvance)}`,
+    ...advancePayments(p).map(x => `Advance${x.date ? ' ' + prettyDate(x.date) : ''}: ${INR(x.amount)} (${x.mode})`),
+    c.advance ? `Total advance: ${INR(c.advance)}` : `Advance (min 25%): ${INR(c.minAdvance)}`,
     c.advance ? `Balance: ${INR(c.balance)}` : null, '',
     '_This is only the estimate. Extra guests or add-ons will be charged additionally._'
   ].filter(l => l !== null).join('\n');
@@ -256,6 +283,7 @@ export default function PartyBookingSheet({ open, booking, prefill, onClose, onS
   const set = (k, v) => setP(prev => ({ ...prev, [k]: v }));
   const setIn = (k, sub, v) => setP(prev => ({ ...prev, [k]: { ...prev[k], [sub]: v } }));
   const setAddon = (ix, patch) => setP(prev => ({ ...prev, addons: prev.addons.map((a, i) => i === ix ? { ...a, ...patch } : a) }));
+  const setPayment = (ix, patch) => setP(prev => ({ ...prev, payments: prev.payments.map((x, i) => i === ix ? { ...x, ...patch } : x) }));
 
   const c = calcParty(p);
   const bd = birthdayNo(p);
@@ -273,15 +301,17 @@ export default function PartyBookingSheet({ open, booking, prefill, onClose, onS
   const save = async () => {
     if (!p.partyDate) { toast('Party date chahiye'); return; }
     setBusy(true);
+    const payments = advancePayments(p).map(x => ({ date: x.date || dstr(), amount: n(x.amount), mode: x.mode || 'CASH' }));
+    const advanceMode = advanceModeLabel({ payments });
     const payload = {
       name: p.childName || p.motherName || p.fatherName || 'Walk-in',
       phone: (p.motherPhone || p.fatherPhone || '').replace(/\D/g, '').slice(-10),
       eventDate: p.partyDate,
       guests: c.fin.kids + c.fin.adults,
-      advance: c.advance, advanceMode: p.advanceMode,
+      advance: c.advance, advanceMode,
       estimate: c.total,
       note: [bd ? nth(bd) + ' Birthday' : 'Party', themeOf(p) && themeOf(p) + ' theme', timingOf(p)].filter(Boolean).join(' · '),
-      party: p
+      party: { ...p, payments, advance: c.advance, advanceMode }
     };
     try {
       const { data } = booking
@@ -435,13 +465,21 @@ export default function PartyBookingSheet({ open, booking, prefill, onClose, onS
       </Section>
 
       <Section title="Payment">
-        <div className="row">
-          <Num label="Advance received" value={p.advance} onChange={v => set('advance', v)} flex="1 1 130px" />
-          <div style={{ flex: '1 1 180px' }}>
-            <span className="hint" style={{ display: 'block', marginBottom: 5 }}>Mode</span>
-            <Seg options={PAY_MODES} value={p.advanceMode} onChange={v => set('advanceMode', v)} />
+        <span className="hint" style={{ display: 'block', marginBottom: 5 }}>Advance received (jis din jitna aaya)</span>
+        {p.payments.length === 0 && <p className="hint" style={{ margin: '0 0 8px', fontSize: 12 }}>Abhi koi advance nahi.</p>}
+        {p.payments.map((x, ix) => (
+          <div className="splitrow" key={ix}>
+            <input type="date" value={x.date || ''} onChange={e => setPayment(ix, { date: e.target.value })} style={{ flex: '1 1 130px', minWidth: 0, padding: '7px 9px' }} aria-label="Advance date" />
+            <input type="number" min="0" placeholder="₹" value={x.amount || ''} onChange={e => setPayment(ix, { amount: n(e.target.value) })} style={{ width: 110, padding: '7px 9px' }} aria-label="Advance amount" />
+            <select value={x.mode} onChange={e => setPayment(ix, { mode: e.target.value })} style={{ width: 84, padding: '7px 6px' }} aria-label="Advance mode">
+              {PAY_MODES.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+            <button type="button" className="btn sm ghost danger" onClick={() => set('payments', p.payments.filter((_, i) => i !== ix))} aria-label="Remove payment">✕</button>
           </div>
-        </div>
+        ))}
+        <button type="button" className="btn sm ghost" style={{ margin: '8px 0 11px' }}
+          onClick={() => set('payments', [...p.payments, { date: dstr(), amount: 0, mode: 'CASH' }])}>+ Advance payment</button>
+        <p style={{ margin: '0 0 11px' }}>Total advance: <b>{INR(c.advance)}</b></p>
         <Txt label="Next payment date (min 25% within 48 hrs)" type="date" value={p.nextPaymentDate} onChange={v => set('nextPaymentDate', v)} />
         {c.total > 0 && c.advance < c.minAdvance && <p className="hint" style={{ color: 'var(--berry)', margin: '0 0 8px' }}>Booking confirm karne ke liye kam se kam {INR(c.minAdvance)} (25%) advance chahiye.</p>}
         <p style={{ margin: '0 0 12px' }}>Balance (party shuru hone se pehle): <b>{INR(c.balance)}</b></p>

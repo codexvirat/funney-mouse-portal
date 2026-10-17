@@ -5,7 +5,7 @@ import { useConfig } from '../context/ConfigContext';
 import { INR } from '../utils/money';
 import { prettyDate, dstr } from '../utils/date';
 import MonthCalendar from '../components/MonthCalendar';
-import PartyBookingSheet, { calcParty, partyFormHTML, nth } from '../components/PartyBookingSheet';
+import PartyBookingSheet, { calcParty, partyFormHTML, nth, advanceByMode, advanceModeLabel } from '../components/PartyBookingSheet';
 import PaymentSheet from '../components/PaymentSheet';
 import ReceiptSheet from '../components/ReceiptSheet';
 import PartyExtrasSheet from '../components/PartyExtrasSheet';
@@ -73,9 +73,18 @@ export default function PartyPage() {
 
   // Party is billed from here — no table is opened — as one bill. Play
   // lines carry no GST, food + add-ons carry theirs; the advance is
-  // pre-filled in its payment mode.
+  // pre-filled in the mode(s) it came in.
   const billCalc = billing ? calcParty(billing.party) : null;
-  const advMode = billing ? (billing.party.advanceMode || 'CASH') : 'CASH';
+  const advMode = billing ? advanceModeLabel(billing.party) : 'CASH';
+  let advPay;
+  if (billing && billCalc.advance > 0) {
+    advPay = {};
+    let left = billCalc.total;
+    Object.entries(advanceByMode(billing.party)).forEach(([m, amt]) => {
+      const v = Math.min(amt, left);
+      if (v > 0) { advPay[m] = v; left -= v; }
+    });
+  }
   const makeBill = async (pay) => {
     const items = billCalc.fin.lines.filter(l => l.amount > 0).map(l => ({ part: l.part, name: `${l.label} (${l.detail})`, rate: l.amount }));
     const { data } = await api.post(`/bookings/${billing._id}/final-bill`, { items, pay });
@@ -221,7 +230,7 @@ export default function PartyPage() {
                 ].filter(Boolean).join(' · ')}
               </p>
               <p style={{ margin: '0 0 12px' }}>
-                Advance <b>{INR(c.advance)}</b> ({p.advanceMode}) · Balance <b>{INR(c.balance)}</b>
+                Advance <b>{INR(c.advance)}</b> ({advanceModeLabel(p)}){(p.payments || []).length > 1 ? <span className="hint"> · {p.payments.length} payments</span> : null} · Balance <b>{INR(c.balance)}</b>
                 {p.nextPaymentDate ? <span className="hint"> · next payment {prettyDate(p.nextPaymentDate)}</span> : null}
               </p>
               {c.fin.lines.some(l => l.extra) && (
@@ -246,7 +255,7 @@ export default function PartyPage() {
       })}
 
       <PaymentSheet open={!!billing} total={billCalc ? billCalc.total : 0} onClose={() => setBilling(null)} onSave={makeBill}
-        initialPay={billing && billCalc.advance > 0 ? { [advMode]: Math.min(billCalc.advance, billCalc.total) } : undefined}
+        initialPay={advPay}
         initialNote={billing ? `${billing.party.childName || billing.name} ki party · Play ${INR(billCalc.fin.playBill)} (no GST) + Food ${INR(billCalc.fin.foodBill)} = ${INR(billCalc.total)}` +
           (billCalc.advance ? ` · advance ${INR(billCalc.advance)} (${advMode}) pehle mil chuka · baaki ${INR(billCalc.balance)}` : '') : undefined} />
       <ReceiptSheet open={!!receipt} bill={receipt && receipt.bill} customer={receipt && receipt.customer} config={config} onClose={() => setReceipt(null)} doneLabel="Done" />

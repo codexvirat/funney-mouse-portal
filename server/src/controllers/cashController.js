@@ -17,23 +17,31 @@ function checkDate(res, date) {
 
 // What should be in the drawer at close: opening + cash bills + cash
 // advances taken today on bookings − cash expenses. A booking's advance was
-// already counted on the day it was taken, so when the event-day bill puts
-// that advance under CASH again it's taken back out here.
+// already counted on the day it was taken (each date-wise party payment on
+// its own date), so when the event-day bill puts that advance under CASH
+// again it's taken back out here.
 async function drawerSummary(date) {
+  const start = new Date(date + 'T00:00:00'), end = new Date(addDays(date, 1) + 'T00:00:00');
   const [day, expenses, bills, bookings] = await Promise.all([
     CashDay.findById(date),
     Expense.find({ date }).sort('createdAt'),
     Sale.find({ date, void: false }),
     Booking.find({
-      createdAt: { $gte: new Date(date + 'T00:00:00'), $lt: new Date(addDays(date, 1) + 'T00:00:00') },
-      advanceMode: 'CASH', advance: { $gt: 0 }, status: { $ne: 'cancelled' }
+      advance: { $gt: 0 }, status: { $ne: 'cancelled' },
+      $or: [{ createdAt: { $gte: start, $lt: end } }, { 'party.payments.date': date }]
     })
   ]);
   const cashSales = bills.reduce((a, b) => a + ((b.pay && b.pay.CASH) || 0), 0);
   const advanceInBills = bills
-    .filter(b => b.bookingId && b.advanceMode === 'CASH')
-    .reduce((a, b) => a + Math.min(b.advance || 0, (b.pay && b.pay.CASH) || 0), 0);
-  const bookingAdvance = bookings.reduce((a, b) => a + b.advance, 0);
+    .filter(b => b.bookingId)
+    .reduce((a, b) => a + (b.advanceByMode
+      ? Number(b.advanceByMode.CASH) || 0
+      : b.advanceMode === 'CASH' ? Math.min(b.advance || 0, (b.pay && b.pay.CASH) || 0) : 0), 0);
+  const bookingAdvance = bookings.reduce((a, b) => {
+    const list = b.party && b.party.payments;
+    if (Array.isArray(list)) return a + list.filter(x => x.date === date && (x.mode || 'CASH') === 'CASH').reduce((s, x) => s + (Number(x.amount) || 0), 0);
+    return a + (b.advanceMode === 'CASH' && b.createdAt >= start && b.createdAt < end ? b.advance : 0);
+  }, 0);
   const cashExpenses = expenses.filter(e => e.mode === 'CASH').reduce((a, e) => a + e.amount, 0);
   const totalExpenses = expenses.reduce((a, e) => a + e.amount, 0);
   const opening = day && day.opening != null ? day.opening : 0;

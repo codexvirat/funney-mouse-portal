@@ -39,6 +39,8 @@ const saleSchema = new mongoose.Schema({
   serviceChargePct: { type: Number, default: 0 },
   advance: { type: Number, default: 0 },
   advanceMode: { type: String, default: '' },
+  // Party bills whose advance came in more than one mode: { CASH, UPI, ... }.
+  advanceByMode: { type: mongoose.Schema.Types.Mixed, default: null },
   durationMins: { type: Number, default: 0 },
   bookingId: { type: String, default: '' },
   pointsRedeemed: { type: Number, default: 0 },
