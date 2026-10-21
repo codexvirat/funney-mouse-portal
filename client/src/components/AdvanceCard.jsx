@@ -5,8 +5,9 @@ import { prettyDate } from '../utils/date';
 // All advance money at a glance — shown on both the admin Day-end screen and
 // the owner portal. `api` is whichever axios client the screen logs in with.
 // `adjusted` is the advance already netted into bills for the period (from
-// the report rollup).
-export default function AdvanceCard({ api, from, to, adjusted = 0 }) {
+// the report rollup); `sale` is the period's billed sale, for the expected
+// total. `en` gives English labels (owner portal).
+export default function AdvanceCard({ api, from, to, adjusted = 0, sale = 0, en = false }) {
   const [data, setData] = useState(null);
   const [open, setOpen] = useState(false);
 
@@ -20,21 +21,51 @@ export default function AdvanceCard({ api, from, to, adjusted = 0 }) {
   }, [from, to]);
 
   if (!data) return null;
-  const { pending, openTables, received } = data;
+  const { estimate, received, pending, later, openTables, unbilledEstimate } = data;
+  // Billed parties are already in the sale, so only the unbilled ones' estimate is added.
+  const expected = sale + unbilledEstimate.total;
+  const plural = (k, w) => `${k} ${k === 1 ? w : w === 'party' ? 'parties' : w + 's'}`;
+  // Every party counts in the period of its own date — its advance and
+  // estimate both — however early the booking was made.
   const tiles = [
-    ['Is period ki parties ka', received.total, `${received.count} booking${received.count === 1 ? '' : 's'}`],
-    ['Bills me adjust hui', adjusted, 'is period ke bills'],
-    ['Future bookings pe pending', pending.total, `${pending.list.length} booking${pending.list.length === 1 ? '' : 's'}`],
-    ['Abhi open tables pe', openTables.total, `${openTables.list.length} table${openTables.list.length === 1 ? '' : 's'}`]
+    [en ? "Estimate for this period's parties" : 'Is period ki parties ka estimate', estimate.total, `${plural(estimate.list.length, 'party')} · ${en ? 'after advance' : 'advance ke baad'} ${INR(Math.max(0, estimate.total - received.total))}`],
+    [en ? "Advance for this period's parties" : 'Is period ki parties ka advance', received.total, plural(received.count, 'booking')],
+    [en ? 'Adjusted in bills' : 'Bills me adjust hui', adjusted, en ? "this period's bills" : 'is period ke bills'],
+    [en ? 'Of these, not billed yet' : 'Inme abhi bill baaki', pending.total, plural(pending.list.length, 'booking')],
+    [en ? 'Advance on later parties' : 'Aage ki parties pe advance', later.total, plural(later.list.length, 'booking')],
+    [en ? 'On open tables now' : 'Abhi open tables pe', openTables.total, plural(openTables.list.length, 'table')]
   ];
-  const hasList = pending.list.length > 0 || openTables.list.length > 0;
+  const hasList = estimate.list.length > 0 || later.list.length > 0 || openTables.list.length > 0;
+  const partyTable = (list) => (
+    <div className="scrollx" style={{ marginTop: 14 }}>
+      <table className="tb">
+        <thead><tr><th>Party date</th><th>Name</th><th>Guests</th><th style={{ textAlign: 'right' }}>Estimate</th><th style={{ textAlign: 'right' }}>Advance</th></tr></thead>
+        <tbody>
+          {list.map(b => (
+            <tr key={b._id}>
+              <td>{prettyDate(b.eventDate)}{b.status === 'used' ? <><br /><span className="hint">Billed</span></> : null}</td>
+              <td>{b.name || 'Walk-in'}{b.phone ? <><br /><span className="hint">{b.phone}</span></> : null}</td>
+              <td>{b.guests || '—'}</td>
+              <td style={{ textAlign: 'right' }}>{b.estimate ? <b className="num">{INR(b.estimate)}</b> : <span className="hint">—</span>}</td>
+              <td style={{ textAlign: 'right' }}>{b.advance ? <><b className="num">{INR(b.advance)}</b> <span className="hint">({b.advanceMode})</span></> : <span className="hint">—</span>}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 
   return (
     <div className="card">
-      <div className="hd"><h2>Advance amount</h2><div className="spacer"></div>
+      <div className="hd"><h2>Parties: estimate &amp; advance</h2><div className="spacer"></div>
         {hasList && <button className="btn sm ghost" onClick={() => setOpen(o => !o)}>{open ? 'Hide' : 'Details'}</button>}
       </div>
       <div className="bd">
+        <div className="advtile" style={{ marginBottom: 10 }}>
+          <span className="hint">{en ? 'Overall (sales + party estimates)' : 'Overall (sale + parties ka estimate)'}</span>
+          <b className="num">{INR(expected)}</b>
+          <span className="hint">{en ? 'Sales' : 'Sale'} {INR(sale)} + {plural(unbilledEstimate.count, 'party')} {en ? 'not billed yet' : 'jinka bill baaki'} {INR(unbilledEstimate.total)}</span>
+        </div>
         <div className="advgrid">
           {tiles.map(([label, amt, sub]) => (
             <div className="advtile" key={label}>
@@ -45,23 +76,8 @@ export default function AdvanceCard({ api, from, to, adjusted = 0 }) {
           ))}
         </div>
 
-        {open && pending.list.length > 0 && (
-          <div className="scrollx" style={{ marginTop: 14 }}>
-            <table className="tb">
-              <thead><tr><th>Event date</th><th>Name</th><th>Guests</th><th style={{ textAlign: 'right' }}>Advance</th></tr></thead>
-              <tbody>
-                {pending.list.map(b => (
-                  <tr key={b._id}>
-                    <td>{prettyDate(b.eventDate)}</td>
-                    <td>{b.name || 'Walk-in'}{b.phone ? <><br /><span className="hint">{b.phone}</span></> : null}</td>
-                    <td>{b.guests || '—'}</td>
-                    <td style={{ textAlign: 'right' }}><b className="num">{INR(b.advance)}</b> <span className="hint">({b.advanceMode})</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        {open && estimate.list.length > 0 && <><h3 className="hint" style={{ margin: '14px 0 0' }}>{en ? "This period's parties" : 'Is period ki parties'}</h3>{partyTable(estimate.list)}</>}
+        {open && later.list.length > 0 && <><h3 className="hint" style={{ margin: '14px 0 0' }}>{en ? 'Later parties' : 'Aage ki parties'}</h3>{partyTable(later.list)}</>}
         {open && openTables.list.length > 0 && (
           <div className="scrollx" style={{ marginTop: 14 }}>
             <table className="tb">

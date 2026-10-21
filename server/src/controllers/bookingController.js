@@ -236,22 +236,31 @@ exports.finalBill = asyncHandler(async (req, res) => {
 });
 
 // Everything about advance money in one place, for the admin Day-end and
-// owner reports screens: token advances on future bookings not yet used,
-// advances sitting on currently open tables, and advances for parties in the
-// selected period. An advance counts on the party's own date (eventDate),
-// not the day it was taken — a token paid in October for a November party
-// shows up in November's day-end.
+// owner reports screens. Every party counts in the period of its own date
+// (eventDate), not the day the advance was taken — a token paid in October
+// for a November party shows up in November. For the period: the parties'
+// advance and estimate (the bill the booked parties are expected to bring),
+// and of those, the advance on parties not billed yet. Advance on parties
+// after the period is shown on its own, so it doesn't mix into this one.
 exports.advanceSummary = asyncHandler(async (req, res) => {
   const { from, to } = req.query;
-  const [pending, tables, received] = await Promise.all([
-    Booking.find({ status: 'pending', advance: { $gt: 0 } }).sort('eventDate'),
+  const [tables, inPeriod, later] = await Promise.all([
     TableOrder.find({ advance: { $gt: 0 } }).sort('openedAt'),
-    from && to ? Booking.find({ advance: { $gt: 0 }, status: { $ne: 'cancelled' }, eventDate: { $gte: from, $lte: to } }) : []
+    from && to ? Booking.find({ status: { $ne: 'cancelled' }, eventDate: { $gte: from, $lte: to } }).sort('eventDate') : [],
+    Booking.find({ status: 'pending', advance: { $gt: 0 }, ...(to ? { eventDate: { $gt: to } } : {}) }).sort('eventDate')
   ]);
-  const sum = list => list.reduce((a, x) => a + (x.advance || 0), 0);
+  const sum = (list, k = 'advance') => list.reduce((a, x) => a + (x[k] || 0), 0);
+  const row = b => ({ _id: b._id, name: b.name, phone: b.phone, eventDate: b.eventDate, guests: b.guests, advance: b.advance, advanceMode: b.advanceMode, estimate: b.estimate, status: b.status });
+  const withAdvance = inPeriod.filter(b => b.advance > 0);
+  const pending = inPeriod.filter(b => b.status === 'pending' && b.advance > 0);
+  // Parties of the period not billed yet — their money isn't in the sale yet.
+  const unbilled = inPeriod.filter(b => b.status === 'pending');
   res.json({
-    pending: { total: sum(pending), list: pending.map(b => ({ _id: b._id, name: b.name, phone: b.phone, eventDate: b.eventDate, guests: b.guests, advance: b.advance, advanceMode: b.advanceMode })) },
-    openTables: { total: sum(tables), list: tables.map(o => ({ _id: o._id, tableName: o.tableName, name: o.name, advance: o.advance, advanceMode: o.advanceMode })) },
-    received: { total: sum(received), count: received.length }
+    received: { total: sum(withAdvance), count: withAdvance.length },
+    estimate: { total: sum(inPeriod, 'estimate'), count: inPeriod.filter(b => b.estimate > 0).length, list: inPeriod.map(row) },
+    pending: { total: sum(pending), list: pending.map(row) },
+    unbilledEstimate: { total: sum(unbilled, 'estimate'), count: unbilled.length },
+    later: { total: sum(later), list: later.map(row) },
+    openTables: { total: sum(tables), list: tables.map(o => ({ _id: o._id, tableName: o.tableName, name: o.name, advance: o.advance, advanceMode: o.advanceMode })) }
   });
 });

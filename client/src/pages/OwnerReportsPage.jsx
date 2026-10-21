@@ -27,8 +27,8 @@ function DayReport({ date, bills, t, expenses }) {
       <div className="hero"><small>{prettyDate(date)}</small><b>{INR(t.total)}</b>
         {heroSub(t, <span>Avg {INR(t.bills ? t.total / t.bills : 0)}</span>)}
       </div>
-      <ReportBreakdown t={t} />
-      <ProfitCard t={t} expenses={expenses} />
+      <ReportBreakdown t={t} en />
+      <ProfitCard t={t} expenses={expenses} en />
       <TableBreakdown bills={bills} />
       <div className="card">
         <div className="hd"><h2>Bills</h2><div className="spacer"></div>
@@ -51,7 +51,7 @@ function DayReport({ date, bills, t, expenses }) {
                 ))}
               </tbody>
             </table>
-          ) : <div className="empty"><b>Is din koi bill nahi</b>Date badal kar dekhiye.</div>}
+          ) : <div className="empty"><b>No bills on this day</b>Try another date.</div>}
         </div>
       </div>
     </>
@@ -70,8 +70,8 @@ function RangeReport({ label, bills, t, filename, expenses }) {
       <div className="hero"><small>{label}</small><b>{INR(t.total)}</b>
         {heroSub(t, <><span>{keys.length} days open</span><span>Avg/day {INR(keys.length ? t.total / keys.length : 0)}</span></>)}
       </div>
-      <ReportBreakdown t={t} />
-      <ProfitCard t={t} expenses={expenses} />
+      <ReportBreakdown t={t} en />
+      <ProfitCard t={t} expenses={expenses} en />
       <TableBreakdown bills={bills} />
       <div className="card">
         <div className="hd"><h2>Day by day</h2><div className="spacer"></div>
@@ -82,7 +82,7 @@ function RangeReport({ label, bills, t, filename, expenses }) {
               <div className="t"><span>{prettyDate(k).replace(/, \d{4}/, '')}</span><b>{INR(byDay[k])}</b></div>
               <div className="bar"><i style={{ width: Math.round(byDay[k] / max * 100) + '%', background: 'var(--text)' }}></i></div>
             </div>
-          )) : <div className="empty"><b>Is period ka data nahi</b>Bills banne ke baad yahan dikhega.</div>}
+          )) : <div className="empty"><b>No data for this period</b>It will show here once bills are made.</div>}
         </div>
       </div>
     </>
@@ -90,7 +90,7 @@ function RangeReport({ label, bills, t, filename, expenses }) {
 }
 
 const MODES = [
-  { key: 'day', label: 'Din' },
+  { key: 'day', label: 'Day' },
   { key: 'week', label: 'Week' },
   { key: 'month', label: 'Month' },
   { key: 'quarter', label: '3 Months' },
@@ -151,7 +151,7 @@ export default function OwnerReportsPage() {
   } else if (mode === 'week') {
     report = <RangeReport label={`${prettyDate(wk.from).replace(/, \d{4}/, '')} – ${prettyDate(wk.to)}`} bills={bills} t={t} expenses={expenses} filename={wk.from + '_to_' + wk.to} />;
   } else if (mode === 'quarter') {
-    report = <RangeReport label={`Last 3 mahine (${prettyDate(quarterFrom).replace(/, \d{4}/, '')} – ${prettyDate(quarterTo)})`} bills={bills} t={t} expenses={expenses} filename={quarterFrom + '_to_' + quarterTo} />;
+    report = <RangeReport label={`Last 3 months (${prettyDate(quarterFrom).replace(/, \d{4}/, '')} – ${prettyDate(quarterTo)})`} bills={bills} t={t} expenses={expenses} filename={quarterFrom + '_to_' + quarterTo} />;
   } else if (mode === 'year') {
     report = <RangeReport label={String(year)} bills={bills} t={t} expenses={expenses} filename={String(year)} />;
   } else {
@@ -179,11 +179,11 @@ export default function OwnerReportsPage() {
         {mode === 'week' && (
           <div className="row">
             <input type="date" style={{ flex: '2 1 160px' }} value={weekAnchor} onChange={e => setWeekAnchor(e.target.value)} />
-            <button className="btn" style={{ flex: '0 0 auto' }} onClick={() => setWeekAnchor(dstr())}>Is hafte</button>
+            <button className="btn" style={{ flex: '0 0 auto' }} onClick={() => setWeekAnchor(dstr())}>This week</button>
           </div>
         )}
         {mode === 'quarter' && (
-          <p className="hint" style={{ margin: 0 }}>Pichle 3 mahine ka rolling data — {prettyDate(quarterFrom)} se {prettyDate(quarterTo)} tak.</p>
+          <p className="hint" style={{ margin: 0 }}>Rolling last 3 months — {prettyDate(quarterFrom)} to {prettyDate(quarterTo)}.</p>
         )}
         {mode === 'year' && (
           <input type="number" value={year} style={{ maxWidth: 140 }} onChange={e => setYear(Number(e.target.value) || new Date().getFullYear())} />
@@ -198,7 +198,7 @@ export default function OwnerReportsPage() {
         )}
       </div></div>
 
-      {!loading && <AdvanceCard api={api} from={range.from} to={range.to} adjusted={t.advance} />}
+      {!loading && <AdvanceCard api={api} from={range.from} to={range.to} adjusted={t.advance} sale={t.total} en />}
       {loading ? <p className="hint">Loading…</p> : report}
     </>
   );

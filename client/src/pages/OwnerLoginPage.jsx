@@ -14,7 +14,7 @@ export default function OwnerLoginPage() {
     try {
       await loginWithPin(pin);
     } catch (e) {
-      setErr((e.response && e.response.data && e.response.data.message) || 'Galat PIN');
+      setErr((e.response && e.response.data && e.response.data.message) || 'Wrong PIN');
       setPin('');
     } finally {
       setBusy(false);
@@ -33,7 +33,7 @@ export default function OwnerLoginPage() {
           </svg>
         </div>
         <h1 style={{ textAlign: 'center', fontSize: 20, margin: '0 0 4px' }}>Funny Mouse</h1>
-        <p className="hint" style={{ textAlign: 'center', margin: '0 0 20px' }}>Owner reports — apna PIN daaliye</p>
+        <p className="hint" style={{ textAlign: 'center', margin: '0 0 20px' }}>Owner reports — enter your PIN</p>
         <input
           type="password" inputMode="numeric" maxLength={8} autoFocus placeholder="PIN"
           value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 8))}

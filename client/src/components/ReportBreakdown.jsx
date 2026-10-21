@@ -13,16 +13,17 @@ const ZERO = { total: 0, UPI: 0, CASH: 0, CARD: 0, DUE: 0 };
 
 // Per category: what it brought in (its share of the bill totals, GST and
 // service charge included) and how that was paid. Rows add up to the total.
-export default function ReportBreakdown({ t }) {
+// `en` gives English labels (owner portal); the admin screens stay Hinglish.
+export default function ReportBreakdown({ t, en = false }) {
   const byCat = t.byCat || {};
   const rows = CATS.map(([label, k, color]) => ({ label, k, color, ...ZERO, ...(byCat[k] || {}) }));
   const max = Math.max(1, ...rows.map(r => r.total));
-  const pays = [['UPI', 'UPI', 'var(--grape)'], ['Cash', 'CASH', 'var(--mint)'], ['Card', 'CARD', 'var(--sky)'], ['Due / udhaar', 'DUE', 'var(--berry)']];
+  const pays = [['UPI', 'UPI', 'var(--grape)'], ['Cash', 'CASH', 'var(--mint)'], ['Card', 'CARD', 'var(--sky)'], [en ? 'Due (credit)' : 'Due / udhaar', 'DUE', 'var(--berry)']];
   const pmax = Math.max(t.UPI, t.CASH, t.CARD, t.DUE, 1);
   const cell = { textAlign: 'right', whiteSpace: 'nowrap' };
   return (
     <>
-      <div className="card"><div className="hd"><h2>Kis cheez se kitni sale — payment mode ke saath</h2></div><div className="bd scrollx">
+      <div className="card"><div className="hd"><h2>{en ? 'Sales by category and payment mode' : 'Kis cheez se kitni sale — payment mode ke saath'}</h2></div><div className="bd scrollx">
         <table className="tb">
           <thead><tr><th>Category</th>{MODES.map(([l]) => <th key={l} style={cell}>{l}</th>)}<th style={cell}>Total</th></tr></thead>
           <tbody>
@@ -43,7 +44,7 @@ export default function ReportBreakdown({ t }) {
             </tr>
           </tbody>
         </table>
-        <p className="hint" style={{ margin: '10px 0 0', fontSize: 12 }}>Ek bill me kai cheezein ho to uska payment har cheez ke hisse ke hisaab se baanta gaya hai (GST / service charge shamil).</p>
+        <p className="hint" style={{ margin: '10px 0 0', fontSize: 12 }}>{en ? "When a bill has several categories, its payment is split by each category's share (GST / service charge included)." : 'Ek bill me kai cheezein ho to uska payment har cheez ke hisse ke hisaab se baanta gaya hai (GST / service charge shamil).'}</p>
         {t.memberPlayMins > 0 && <p className="hint" style={{ margin: '10px 0 0' }}>Member play (free): {Math.round(t.memberPlayMins / 60 * 10) / 10} kid-hours</p>}
       </div></div>
 
@@ -65,7 +66,7 @@ export default function ReportBreakdown({ t }) {
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}><span className="hint">Total GST (food)</span><b className="num">{INR(t.cgst + t.sgst)}</b></div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12, paddingTop: 11, borderTop: '1px solid var(--line)' }}><span className="hint">Service charge</span><b className="num">{INR(t.service)}</b></div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12, paddingTop: 11, borderTop: '1px solid var(--line)' }}><span className="hint">Advance collected</span><b className="num">{INR(t.advance)}</b></div>
-          {t.disc > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}><span className="hint">Discount diya</span><b className="num">{INR(t.disc)}</b></div>}
+          {t.disc > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}><span className="hint">{en ? 'Discount given' : 'Discount diya'}</span><b className="num">{INR(t.disc)}</b></div>}
         </div></div>
       </div>
     </>

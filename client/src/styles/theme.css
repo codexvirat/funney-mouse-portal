@@ -159,7 +159,7 @@ input::placeholder{color:color-mix(in srgb,var(--muted) 70%,transparent)}
 .pt.cash.on{color:var(--mint);background:var(--mint-soft)}
 .pt.card.on{color:var(--sky);background:var(--sky-soft)}
 .pt.due.on{color:var(--berry);background:var(--berry-soft)}
-.advgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.advgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 @media (max-width:640px){.advgrid{grid-template-columns:repeat(2,1fr)}}
 .advtile{border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:2px;min-width:0}
 .advtile b{font-family:"Bricolage Grotesque";font-size:19px}

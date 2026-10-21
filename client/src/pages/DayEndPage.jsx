@@ -21,7 +21,7 @@ function DayReport({ date, bills, t, expenses, onVoid, onSettle, onEdit }) {
           <span>Avg {INR(t.bills ? t.total / t.bills : 0)}</span>{t.disc > 0 && <span>Disc {INR(t.disc)}</span>}</div>
       </div>
       <ReportBreakdown t={t} />
-      <AdvanceCard api={api} from={date} to={date} adjusted={t.advance} />
+      <AdvanceCard api={api} from={date} to={date} adjusted={t.advance} sale={t.total} />
       <ProfitCard t={t} expenses={expenses} />
       <TableBreakdown bills={bills} />
       <div className="card">
@@ -77,7 +77,7 @@ function MonthReport({ month, bills, t, expenses }) {
           <span>Avg/day {INR(keys.length ? t.total / keys.length : 0)}</span></div>
       </div>
       <ReportBreakdown t={t} />
-      <AdvanceCard api={api} from={month + '-01'} to={month + '-31'} adjusted={t.advance} />
+      <AdvanceCard api={api} from={month + '-01'} to={month + '-31'} adjusted={t.advance} sale={t.total} />
       <ProfitCard t={t} expenses={expenses} />
       <TableBreakdown bills={bills} />
       <div className="card">

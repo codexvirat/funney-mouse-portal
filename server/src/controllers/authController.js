@@ -42,7 +42,7 @@ exports.ownerLogin = asyncHandler(async (req, res) => {
   const { pin } = req.body;
   if (!pin) {
     res.status(400);
-    throw new Error('PIN chahiye');
+    throw new Error('PIN is required');
   }
   const owners = await User.find({ role: 'owner', active: true });
   for (const owner of owners) {
@@ -51,7 +51,7 @@ exports.ownerLogin = asyncHandler(async (req, res) => {
     }
   }
   res.status(401);
-  throw new Error('Galat PIN');
+  throw new Error('Wrong PIN');
 });
 
 
